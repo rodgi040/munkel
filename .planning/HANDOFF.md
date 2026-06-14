@@ -2,32 +2,33 @@
 
 ## Current Snapshot
 
-The project is setting up lightweight planning for the Munkel Windows
-integration. The source of truth now lives under `.planning/`.
+Phase 1 (Stack and Architecture Decision) is complete. The Windows integration
+now has accepted decisions for UI stack, IPC transport, crypto/protocol,
+identity, and packaging. The source of truth lives under `.planning/`.
 
 ## Latest Work
 
-- Created `.planning/README.md`.
-- Created `.planning/PROJECT.md`.
-- Created `.planning/ROADMAP.md`.
-- Created `.planning/STATE.md`.
-- Created `.planning/DECISIONS.md`.
-- Created `.planning/PHASES.md`.
-- Created `.planning/HANDOFF.md`.
+- Created the `platform/windows/phase-1-stack-decision` branch.
+- Decided WinUI 3 / Windows App SDK for the Windows client.
+- Decided named pipes for CLI-to-app IPC.
+- Decided .NET `System.Security.Cryptography` for protocol/crypto compatibility.
+- Decided GitHub device-flow identity, matching macOS.
+- Decided MSIX for release, unpackaged for development.
+- Updated `.planning/DECISIONS.md`, `.planning/STATE.md`, and `.planning/PHASES.md`.
 
 ## Next Step
 
-Start Phase 1: research and decide the Windows stack and architecture.
+Start Phase 2: Windows App Scaffold.
 
 The next agent should read, in order:
 
 1. `.planning/STATE.md`
-2. `.planning/PHASES.md`
+2. `.planning/PHASES.md` (Phase 2)
 3. `.planning/PROJECT.md`
 4. `.planning/DECISIONS.md`
 
-Then update `DECISIONS.md`, `STATE.md`, and this handoff after decisions are
-made.
+Then create the minimal `apps/windows/` WinUI 3 scaffold and update
+`STATE.md`, `HANDOFF.md`, and `PHASES.md` as work progresses.
 
 ## Do Not Touch Yet
 

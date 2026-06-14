@@ -8,22 +8,28 @@
 
 ## Active Phase
 
-Phase 1: Stack and Architecture Decision
+Phase 2: Windows App Scaffold
 
 ## Last Action
 
-Created lightweight planning structure under `.planning/` to replace the loose
-root `Roadmap.md` and `State.md` as the project tracking source of truth.
+Completed Phase 1 on `platform/windows/phase-1-stack-decision`:
+
+- Decided WinUI 3 / Windows App SDK as the Windows UI/runtime stack.
+- Decided named pipes as the Windows CLI-to-app IPC transport.
+- Decided .NET `System.Security.Cryptography` for HKDF-SHA256 / AES-256-GCM.
+- Decided GitHub device-flow identity, matching macOS.
+- Decided MSIX for release, unpackaged for development.
+- Documented all decisions in `.planning/DECISIONS.md`.
 
 ## Next Action
 
-Research and decide the Windows architecture:
+Create the minimal Windows app scaffold under `apps/windows/`:
 
-- UI/runtime stack.
-- Local IPC transport.
-- Crypto/protocol implementation strategy.
-- Packaging direction.
-- How the Windows client maps to the existing macOS app, CLI, and relay.
+- Add a WinUI 3 project (unpackaged desktop app).
+- Wire it into the root workspace / Turborepo where appropriate.
+- Add a minimal app entry point and system-tray placeholder.
+- Document local build/run commands.
+- Add Windows-specific `.gitignore` rules for build artifacts.
 
 ## What Is Done
 
