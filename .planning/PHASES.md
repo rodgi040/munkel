@@ -5,7 +5,7 @@ this file gives scope, exclusions, done criteria, likely files, and tests.
 
 ## Phase 1: Stack and Architecture Decision
 
-Status: Active
+Status: Completed
 
 Goal: Decide the Windows architecture before writing scaffold code.
 
@@ -46,7 +46,7 @@ Tests/checks:
 
 ## Phase 2: Windows App Scaffold
 
-Status: Pending
+Status: Active
 
 Goal: Add a minimal Windows app project under `apps/windows/`.
 
