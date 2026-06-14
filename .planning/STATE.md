@@ -2,8 +2,8 @@
 
 ## Branches
 
-- Integration branch: `platform/windows`
-- Current working branch: `platform-windows-planning-files`
+- Integration branch: `platform/windows-integration`
+- Current working branch: `platform/windows/planning`
 - Main branch protection: do not commit, push, rebase, or fast-forward `main`.
 
 ## Active Phase

@@ -36,10 +36,14 @@ made.
 - Do not run release tooling, version bumps, or changelog generation.
 - Do not commit, push, rebase, or fast-forward `main`.
 
-## Known Branch Note
+## Branch Setup
 
-The requested branch pattern `platform/windows/<feature>` cannot coexist with
-an existing local branch named `platform/windows` in Git ref storage. For this
-setup, the working branch is `platform-windows-planning-files`, with
-`platform/windows` remaining the integration target.
+- Integration branch: `platform/windows-integration`
+- Current feature branch: `platform/windows/planning`
+- Feature sub-branches: `platform/windows/<short-feature>` off `platform/windows-integration`
+
+Note: Git cannot hold both a branch named `platform/windows` and branches under
+`platform/windows/<feature>` because branch refs are stored as files. The
+integration branch therefore uses the suffix `-integration` so that sub-branches
+can live cleanly under `platform/windows/`.
 
