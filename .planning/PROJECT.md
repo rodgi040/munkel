@@ -42,9 +42,9 @@ control.
 
 ## Repository Constraints
 
-- Long-running integration branch: `platform/windows`.
+- Long-running integration branch: `platform/windows-integration`.
 - Isolated work should happen on feature branches and merge into
-  `platform/windows` by PR.
+  `platform/windows-integration` by PR.
 - Never commit, push, rebase, or fast-forward `main` from this workspace.
 - Do not run release tooling, release-please, version bumps, or changelog
   generation automatically.
@@ -64,10 +64,9 @@ control.
 
 ## Current Focus
 
-Phase 1: Stack and Architecture Decision. Decide the Windows UI/runtime stack,
-local IPC transport, crypto implementation strategy, packaging direction, and
-how the Windows client maps to the existing Munkel architecture before
-scaffolding `apps/windows/`.
+Phase 4: Protocol and Crypto Compatibility in the App. Integrate
+`@munkel/core` into the Electron app, verify golden vectors, and prepare the
+relay/session client (Phase 5) while keeping raw keys in the main process.
 
 ---
 
