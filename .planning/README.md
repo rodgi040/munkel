@@ -42,9 +42,9 @@ After each work session:
 ## Git Rules
 
 - These `.planning/` files are versioned on the Windows integration work.
-- The long-running integration target is `platform/windows`.
+- The long-running integration target is `platform/windows-integration`.
 - Feature work should happen on a separate branch and be merged into
-  `platform/windows` by PR.
+  `platform/windows-integration` by PR.
 - Do not commit, push, rebase, or fast-forward `main` from this workspace.
 - Do not run release tooling, version bumps, or changelog generation
   automatically.

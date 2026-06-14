@@ -51,7 +51,7 @@ Tests/checks:
 
 ## Phase 2: Shared Core Package
 
-Status: **Pending**
+Status: **Completed**
 
 Goal: Create `packages/munkel-core/` as the single source of truth for
 protocol, crypto, relay primitives, and local IPC transport used by both the
@@ -108,7 +108,7 @@ Tests/checks:
 
 ## Phase 3: Windows App Scaffold
 
-Status: **Pending**
+Status: **Completed**
 
 Goal: Add a minimal Electron project under `apps/windows/` with the selected
 project structure, build tooling, and a runnable shell.
@@ -156,7 +156,7 @@ Tests/checks:
 
 ## Phase 4: Protocol and Crypto Compatibility in the App
 
-Status: **Pending**
+Status: **In Progress**
 
 Goal: Integrate `munkel-core` into the Electron app and prove Windows produces
 compatible crypto bytes and payloads.
@@ -243,7 +243,9 @@ Tests/checks:
 
 Status: **Pending**
 
-Goal: Build the first usable Windows app experience.
+Goal: Complete the first usable Windows app experience. The UI shell (tray,
+menu, palette, notch widget) is already built in Phase 3; remaining work is
+wiring real data and capture-exclusion research.
 
 Scope:
 

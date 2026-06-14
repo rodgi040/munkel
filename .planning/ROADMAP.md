@@ -30,7 +30,7 @@ Key outcomes:
 
 ## Phase 2: Shared Core Package (`packages/munkel-core/`)
 
-Status: **Pending**
+Status: **Completed**
 
 Goal: Create one source of truth for cross-platform protocol, crypto, and
 transport logic used by both the Electron app and the CLI.
@@ -58,7 +58,7 @@ Key outcomes:
 
 ## Phase 3: Windows App Scaffold (`apps/windows/`)
 
-Status: **Pending**
+Status: **Completed**
 
 Goal: Add a minimal Electron project with the selected tooling and a runnable
 shell.
@@ -84,7 +84,7 @@ Key outcomes:
 
 ## Phase 4: Protocol and Crypto Compatibility in the App
 
-Status: **Pending**
+Status: **In Progress**
 
 Goal: Integrate `munkel-core` into the Electron app and prove that the Windows
 client produces compatible bytes.
@@ -135,8 +135,10 @@ Key outcomes:
 
 Status: **Pending**
 
-Goal: Build the first usable Windows app surface for joining circles, showing
-members, sending messages, and displaying incoming messages.
+Goal: Complete the first usable Windows app surface for joining circles,
+showing members, sending messages, and displaying incoming messages. The UI
+shell (tray, menu, palette, notch widget) was built in Phase 3; remaining work
+is wiring real data and capture-exclusion research.
 
 Feature order:
 
