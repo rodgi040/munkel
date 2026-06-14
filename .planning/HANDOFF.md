@@ -2,38 +2,52 @@
 
 ## Current Snapshot
 
-Phase 1 (Stack and Architecture Decision) is complete. The Windows integration
-now has accepted decisions for UI stack, IPC transport, crypto/protocol,
-identity, and packaging. The source of truth lives under `.planning/`.
+Phase 1 (Stack and Architecture Decision) is complete. The Windows stack was
+changed from the previously accepted **WinUI 3 / Windows App SDK** to
+**Electron**, based on user direction. All planning files have been updated to
+reflect the new direction.
+
+The chosen architecture is **Option B**: a shared `packages/munkel-core/`
+library plus an Electron app under `apps/windows/`. The shared core owns
+protocol types, crypto, key derivation, app payloads, avatar codec, and
+named-pipe transport helpers.
 
 ## Latest Work
 
-- Created the `platform/windows/phase-1-stack-decision` branch.
-- Decided WinUI 3 / Windows App SDK for the Windows client.
-- Decided named pipes for CLI-to-app IPC.
-- Decided .NET `System.Security.Cryptography` for protocol/crypto compatibility.
-- Decided GitHub device-flow identity, matching macOS.
-- Decided MSIX for release, unpackaged for development.
-- Updated `.planning/DECISIONS.md`, `.planning/STATE.md`, and `.planning/PHASES.md`.
+- Updated `.planning/DECISIONS.md`:
+  - WinUI 3 / .NET decisions marked Superseded.
+  - Electron, Node.js crypto, notch widget, and capture-exclusion deferral
+    decisions added as Accepted.
+- Updated `.planning/ROADMAP.md` with the ordered 8-phase feature roadmap.
+- Updated `.planning/PHASES.md` with detailed scope, exclusions, done criteria,
+  and tests for each phase.
+- Updated `.planning/STATE.md` with current status and next action.
 
 ## Next Step
 
-Start Phase 2: Windows App Scaffold.
+Start **Phase 2: Shared Core Package**.
 
 The next agent should read, in order:
 
 1. `.planning/STATE.md`
 2. `.planning/PHASES.md` (Phase 2)
-3. `.planning/PROJECT.md`
+3. `.planning/ROADMAP.md`
 4. `.planning/DECISIONS.md`
+5. `apps/server/src/protocol.ts`
+6. `apps/macos/Sources/MunkelKit/GroupKey.swift`
+7. `apps/macos/Sources/MunkelKit/MessageCrypto.swift`
+8. `apps/macos/Sources/MunkelKit/AppPayload.swift`
+9. `apps/macos/Sources/MunkelKit/ControlProtocol.swift`
 
-Then create the minimal `apps/windows/` WinUI 3 scaffold and update
-`STATE.md`, `HANDOFF.md`, and `PHASES.md` as work progresses.
+Then create branch `platform/windows/shared-core-scaffold` from
+`platform/windows-integration` and begin scaffolding `packages/munkel-core/`.
 
 ## Do Not Touch Yet
 
-- Do not create `apps/windows/` until Phase 1 decisions are accepted.
-- Do not change macOS/server/landing code during planning setup.
+- Do not create `apps/windows/` until the shared core has the crypto and
+  protocol primitives it will consume.
+- Do not change macOS/server/landing code during Phase 2 unless a shared
+  cross-platform interface absolutely requires it.
 - Do not run release tooling, version bumps, or changelog generation.
 - Do not commit, push, rebase, or fast-forward `main`.
 
@@ -41,10 +55,11 @@ Then create the minimal `apps/windows/` WinUI 3 scaffold and update
 
 - Integration branch: `platform/windows-integration`
 - Current feature branch: `platform/windows/planning`
-- Feature sub-branches: `platform/windows/<short-feature>` off `platform/windows-integration`
+- Next feature branch: `platform/windows/shared-core-scaffold`
+- Feature sub-branches: `platform/windows/<short-feature>` off
+  `platform/windows-integration`
 
 Note: Git cannot hold both a branch named `platform/windows` and branches under
 `platform/windows/<feature>` because branch refs are stored as files. The
 integration branch therefore uses the suffix `-integration` so that sub-branches
 can live cleanly under `platform/windows/`.
-
