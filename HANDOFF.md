@@ -1,3 +1,48 @@
+# Handoff — munkel (2026-07-07)
+
+## current_state
+
+- **Aktueller Branch:** `platform/windows/update-signature-fix` (Tip: `8bbf196`).
+- **Working directory:** clean, alle Änderungen committed.
+- **Session pausiert** auf User-Anweisung (`/fp-pause`).
+- **Hinweis Branch-Wechsel:** Während der Arbeit wurde der Worktree wiederholt auf andere Branches verschoben (z. B. `platform/windows/profile-payload-drift-fix`, `platform/windows/sendchat-cap-fix`, jetzt `platform/windows/update-signature-fix`). Der aktuell aktive Branch ist `update-signature-fix`.
+
+## completed in dieser Session
+
+### 1. Plan 18 — Image Preview Overlay / Lightbox Dokumentation aktualisiert
+- **Branch:** `platform/windows/feature/image-preview-overlay`
+- **Commit:** `175b033` — docs(windows): update Plan 18 docs and source comment to reflect implemented lightbox
+- **Inhalt:**
+  - `graphify-out/ios-feature-gap-list.md`: Image hover preview / lightbox und Animated image support auf ✅ Present gesetzt.
+  - `graphify-out/windows-feature-gaps.md`: Image lightbox aus größten Gaps entfernt; Inventory-Einträge als resolved markiert.
+  - `graphify-out/ios-feature-sync-report.md`: Image Preview Overlay als implementiert vermerkt.
+  - `apps/windows/src/renderer/components/NotchWidget.tsx`: veralteten Kommentar „they may gain a lightbox later" aktualisiert.
+- **Verifikation:** `bun run typecheck` green; `bun test apps/windows packages/shared-wire`: 237 pass / 2 skip / 0 fail.
+
+### 2. sendchat-cap-fix committed
+- **Branch:** `platform/windows/sendchat-cap-fix`
+- **Commit:** `415d98f` — fix(shared-wire,windows): clamp chat text to MAX_CHAT_CHARS instead of rejecting
+- **Inhalt:**
+  - `packages/shared-wire/src/wire-constants.ts`: `MAX_CHAT_CHARS = 2048` hinzugefügt.
+  - `packages/shared-wire/src/payload.ts`: `encodeChat` clamped Text auf `MAX_CHAT_CHARS`.
+  - Tests in `apps/windows/src/core/__tests__/payload.test.ts` und `apps/windows/src/main/__tests__/group-session.test.ts` angepasst.
+- **Verifikation:** typecheck + tests green.
+
+## remaining / next_actions
+
+1. **Aktuellen Branch `update-signature-fix`** sauber zu Ende bringen (sofern nicht schon done — aktueller Tip `8bbf196` lautet „require user confirmation before installing updates").
+2. **iOS-latest-Features-Workflow** starten:
+   - `platform/windows/feature/ios-latest-features` von aktuellem `v2-clean` abzweigen.
+   - Mit AgentSwarm + Graphify die neuesten iOS/macOS-Features identifizieren.
+   - Pro Feature Sub-Branch anlegen, implementieren, in `ios-latest-features` mergen.
+   - Abschließend PR `ios-latest-features` → `platform/windows/v2-clean` und taggen.
+3. **Offene Branches** vorher in `v2-clean` mergen, falls ready:
+   - `platform/windows/feature/image-preview-overlay`
+   - `platform/windows/feature/presence-status`
+   - `platform/windows/sendchat-cap-fix`
+
+---
+
 # Handoff — munkel (2026-07-05)
 
 ## current_state
