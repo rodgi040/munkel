@@ -16,6 +16,8 @@ export default function MenuWindow() {
 		githubLogout,
 		checkForUpdates,
 		installUpdate,
+		confirmInstallUpdate,
+		cancelInstallUpdate,
 	} = useAppStore();
 
 	const [joinCode, setJoinCode] = useState('');
@@ -134,7 +136,13 @@ export default function MenuWindow() {
 				</div>
 			</div>
 
-			<UpdateStatus state={state.updateState} onCheck={() => void checkForUpdates()} onInstall={() => void installUpdate()} />
+			<UpdateStatus
+				state={state.updateState}
+				onCheck={() => void checkForUpdates()}
+				onInstall={() => void installUpdate()}
+				onConfirmInstall={() => void confirmInstallUpdate()}
+				onCancelInstall={() => void cancelInstallUpdate()}
+			/>
 
 			{state.circles.length === 0 && (
 				<p className="hint">No circles yet. Create one or join with a code.</p>
@@ -230,7 +238,19 @@ export default function MenuWindow() {
 	);
 }
 
-function UpdateStatus({ state, onCheck, onInstall }: { state: UpdateState; onCheck: () => void; onInstall: () => void }) {
+function UpdateStatus({
+	state,
+	onCheck,
+	onInstall,
+	onConfirmInstall,
+	onCancelInstall,
+}: {
+	state: UpdateState;
+	onCheck: () => void;
+	onInstall: () => void;
+	onConfirmInstall: () => void;
+	onCancelInstall: () => void;
+}) {
 	if (state.phase === 'idle') return null;
 
 	const labels: Record<Exclude<UpdateState['phase'], 'idle'>, string> = {
@@ -238,11 +258,13 @@ function UpdateStatus({ state, onCheck, onInstall }: { state: UpdateState; onChe
 		available: `Update available${state.version ? ` (v${state.version})` : ''}`,
 		downloading: state.progress ? `Downloading update… ${Math.round(state.progress)}%` : 'Downloading update…',
 		downloaded: `Update ready${state.version ? ` (v${state.version})` : ''}`,
+		confirm: `Update ready${state.version ? ` (v${state.version})` : ''} — restart required`,
 		error: state.error ?? 'Update error',
 	};
 
 	const isError = state.phase === 'error';
 	const isDownloaded = state.phase === 'downloaded';
+	const isConfirm = state.phase === 'confirm';
 
 	return (
 		<div className={isError ? 'update-status update-error' : 'update-status'}>
@@ -256,6 +278,16 @@ function UpdateStatus({ state, onCheck, onInstall }: { state: UpdateState; onChe
 				<button className="button-small" onClick={onInstall}>
 					Install
 				</button>
+			)}
+			{isConfirm && (
+				<>
+					<button className="button-small" onClick={onConfirmInstall}>
+						Install now
+					</button>
+					<button className="button-small" onClick={onCancelInstall}>
+						Later
+					</button>
+				</>
 			)}
 		</div>
 	);

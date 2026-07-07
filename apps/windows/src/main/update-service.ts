@@ -8,6 +8,8 @@ export type UpdateSend = (state: UpdateState) => void;
 export interface UpdateService {
 	check: () => void;
 	install: () => void;
+	confirmInstall: () => void;
+	cancelInstall: () => void;
 	dispose: () => void;
 }
 
@@ -89,7 +91,7 @@ class UpdateServiceImpl implements UpdateService {
 	}
 
 	check(): void {
-		if (this.isDev || this.checking || this.phase === 'downloaded') return;
+		if (this.isDev || this.checking || this.phase === 'downloaded' || this.phase === 'confirm') return;
 		this.checking = true;
 		this.autoUpdater
 			.checkForUpdates()
@@ -105,8 +107,18 @@ class UpdateServiceImpl implements UpdateService {
 
 	install(): void {
 		if (this.phase !== 'downloaded' || this.installing) return;
+		this.setPhase('confirm', { version: this.downloadedVersion });
+	}
+
+	confirmInstall(): void {
+		if (this.phase !== 'confirm' || this.installing) return;
 		this.installing = true;
 		this.autoUpdater.quitAndInstall(false, true);
+	}
+
+	cancelInstall(): void {
+		if (this.phase !== 'confirm') return;
+		this.setPhase('downloaded', { version: this.downloadedVersion });
 	}
 
 	startPeriodicCheck(): void {

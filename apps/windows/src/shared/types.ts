@@ -35,7 +35,7 @@ export interface GitHubLoginState {
 	error?: string;
 }
 
-export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error';
+export type UpdatePhase = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'confirm' | 'error';
 
 export interface UpdateState {
 	phase: UpdatePhase;
@@ -98,6 +98,8 @@ export interface IpcApi {
 
 	checkForUpdates: () => Promise<void>;
 	installUpdate: () => Promise<void>;
+	confirmInstallUpdate: () => Promise<void>;
+	cancelInstallUpdate: () => Promise<void>;
 
 	// Main → renderer push channels.
 	onStateUpdate: (callback: (update: StateUpdate) => void) => () => void;

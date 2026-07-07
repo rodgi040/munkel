@@ -194,6 +194,12 @@ app.whenReady().then(async () => {
 	ipcMain.handle('install-update', async () => {
 		updateService?.install();
 	});
+	ipcMain.handle('confirm-install-update', async () => {
+		updateService?.confirmInstall();
+	});
+	ipcMain.handle('cancel-install-update', async () => {
+		updateService?.cancelInstall();
+	});
 
 	await appState.restoreCircles();
 	appState.broadcast();

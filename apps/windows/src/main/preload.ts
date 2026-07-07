@@ -29,6 +29,8 @@ const api: IpcApi = {
 
 	checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
 	installUpdate: () => ipcRenderer.invoke('install-update'),
+	confirmInstallUpdate: () => ipcRenderer.invoke('confirm-install-update'),
+	cancelInstallUpdate: () => ipcRenderer.invoke('cancel-install-update'),
 
 	beginNotchReply: () => ipcRenderer.invoke('notch-begin-reply'),
 	endNotchReply: () => ipcRenderer.invoke('notch-end-reply'),

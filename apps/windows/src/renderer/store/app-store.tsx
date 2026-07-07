@@ -43,6 +43,8 @@ interface AppStore {
 
 	checkForUpdates: () => Promise<void>;
 	installUpdate: () => Promise<void>;
+	confirmInstallUpdate: () => Promise<void>;
+	cancelInstallUpdate: () => Promise<void>;
 }
 
 const AppContext = createContext<AppStore | null>(null);
@@ -165,6 +167,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 		await window.electronAPI.installUpdate();
 	}, []);
 
+	const confirmInstallUpdate = useCallback(async () => {
+		await window.electronAPI.confirmInstallUpdate();
+	}, []);
+
+	const cancelInstallUpdate = useCallback(async () => {
+		await window.electronAPI.cancelInstallUpdate();
+	}, []);
+
 	const store = useMemo<AppStore>(
 		() => ({
 			state,
@@ -184,6 +194,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 			githubLogout,
 			checkForUpdates,
 			installUpdate,
+			confirmInstallUpdate,
+			cancelInstallUpdate,
 		}),
 		[
 			state,
@@ -203,6 +215,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 			githubLogout,
 			checkForUpdates,
 			installUpdate,
+			confirmInstallUpdate,
+			cancelInstallUpdate,
 		],
 	);
 
