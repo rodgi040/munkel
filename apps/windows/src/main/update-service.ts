@@ -18,7 +18,7 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 function isSignatureError(error: unknown): boolean {
 	if (typeof error !== 'object' || error === null) return false;
 	const message = String((error as Error).message ?? '').toLowerCase();
-	return message.includes('signature') || message.includes('codesign') || message.includes('certificate');
+	return message.includes('signature') || message.includes('codesign');
 }
 
 function userMessageForError(error: unknown): string {
@@ -91,7 +91,8 @@ class UpdateServiceImpl implements UpdateService {
 	}
 
 	check(): void {
-		if (this.isDev || this.checking || this.phase === 'downloaded' || this.phase === 'confirm') return;
+		if (this.isDev || this.checking) return;
+		if (this.phase === 'available' || this.phase === 'downloading' || this.phase === 'downloaded' || this.phase === 'confirm') return;
 		this.checking = true;
 		this.autoUpdater
 			.checkForUpdates()
@@ -113,11 +114,16 @@ class UpdateServiceImpl implements UpdateService {
 	confirmInstall(): void {
 		if (this.phase !== 'confirm' || this.installing) return;
 		this.installing = true;
-		this.autoUpdater.quitAndInstall(false, true);
+		try {
+			this.autoUpdater.quitAndInstall(false, true);
+		} catch (error) {
+			this.installing = false;
+			this.setPhase('error', { error: userMessageForError(error) });
+		}
 	}
 
 	cancelInstall(): void {
-		if (this.phase !== 'confirm') return;
+		if (this.phase !== 'confirm' || this.installing) return;
 		this.setPhase('downloaded', { version: this.downloadedVersion });
 	}
 
@@ -131,6 +137,7 @@ class UpdateServiceImpl implements UpdateService {
 			clearInterval(this.intervalId);
 			this.intervalId = null;
 		}
+		this.autoUpdater.removeAllListeners();
 	}
 
 	private setPhase(phase: UpdatePhase, extras: { version?: string; progress?: number; error?: string } = {}): void {
@@ -140,7 +147,9 @@ class UpdateServiceImpl implements UpdateService {
 		} else if (phase !== 'error') {
 			this.error = undefined;
 		}
-		if (extras.version !== undefined) {
+		if (phase === 'idle' || phase === 'error') {
+			this.downloadedVersion = undefined;
+		} else if (extras.version !== undefined) {
 			this.downloadedVersion = extras.version;
 		}
 

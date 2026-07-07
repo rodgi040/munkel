@@ -188,16 +188,20 @@ app.whenReady().then(async () => {
 	ipcMain.handle('cancel-github-login', async () => {
 		githubLoginService.cancelGitHubLogin();
 	});
-	ipcMain.handle('check-for-updates', async () => {
+	ipcMain.handle('check-for-updates', async (event: IpcMainInvokeEvent) => {
+		if (!menuWindow || BrowserWindow.fromWebContents(event.sender) !== menuWindow) return;
 		updateService?.check();
 	});
-	ipcMain.handle('install-update', async () => {
+	ipcMain.handle('install-update', async (event: IpcMainInvokeEvent) => {
+		if (!menuWindow || BrowserWindow.fromWebContents(event.sender) !== menuWindow) return;
 		updateService?.install();
 	});
-	ipcMain.handle('confirm-install-update', async () => {
+	ipcMain.handle('confirm-install-update', async (event: IpcMainInvokeEvent) => {
+		if (!menuWindow || BrowserWindow.fromWebContents(event.sender) !== menuWindow) return;
 		updateService?.confirmInstall();
 	});
-	ipcMain.handle('cancel-install-update', async () => {
+	ipcMain.handle('cancel-install-update', async (event: IpcMainInvokeEvent) => {
+		if (!menuWindow || BrowserWindow.fromWebContents(event.sender) !== menuWindow) return;
 		updateService?.cancelInstall();
 	});
 
