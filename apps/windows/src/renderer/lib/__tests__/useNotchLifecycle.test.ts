@@ -192,7 +192,7 @@ describe('useNotchLifecycle', () => {
 		expect(emptySpy).toHaveBeenCalledTimes(1);
 	});
 
-	it('hover-stuck repro: hovering never clears but empty-hide still fires', async () => {
+	it('hover ceiling: stuck hovering clears in peek so empty-hide still fires', async () => {
 		const setInteractiveSpy = spyOn(electronApi, 'notchSetInteractive');
 		const emptySpy = spyOn(electronApi, 'notchEmpty');
 
@@ -214,14 +214,19 @@ describe('useNotchLifecycle', () => {
 			timers.advance(5_000);
 		});
 		expect(result.current.phase).toBe('peek');
-		// hovering is still true, so the window remains interactive via reopening.
+		// Still hovering — interactive via reopening until ceiling fires.
 		expect(setInteractiveSpy).toHaveBeenLastCalledWith(true);
-
-		// Simulate a missing mouseleave event — hovering stays true.
 		expect(result.current.hovering).toBe(true);
 
+		// Simulate dropped mouseleave: ceiling clears hovering after HOVER_CEILING_MS.
 		await act(async () => {
-			timers.advance(55_000);
+			timers.advance(8_000);
+		});
+		expect(result.current.hovering).toBe(false);
+		expect(setInteractiveSpy).toHaveBeenLastCalledWith(false);
+
+		await act(async () => {
+			timers.advance(47_000);
 		});
 		expect(result.current.history.length).toBe(0);
 
@@ -229,9 +234,42 @@ describe('useNotchLifecycle', () => {
 			timers.advance(350);
 		});
 		expect(emptySpy).toHaveBeenCalledTimes(1);
-		// hovering is still stuck to demonstrate the bug condition, but the hide
-		// deadline no longer depends on it.
+	});
+
+	it('closeReply re-arms a leave that was suppressed while reply was open', async () => {
+		const setInteractiveSpy = spyOn(electronApi, 'notchSetInteractive');
+		const { result } = renderHook(useNotchLifecycle);
+
+		await act(async () => {
+			result.current.onNotchMessage(makeMessage({ text: 'reply me' }));
+		});
+		await act(async () => {
+			result.current.reopenFromHoverTarget();
+		});
 		expect(result.current.hovering).toBe(true);
+
+		const entry = result.current.history[0];
+		await act(async () => {
+			result.current.openReply(entry);
+		});
+		expect(result.current.replyOpen).toBe(true);
+
+		// Mouse leaves while reply is open — leave is suppressed.
+		await act(async () => {
+			result.current.scheduleHoverLeave();
+		});
+		expect(result.current.hovering).toBe(true);
+
+		await act(async () => {
+			result.current.closeReply();
+		});
+		expect(result.current.replyOpen).toBe(false);
+		// Leave re-armed: after HOVER_LEAVE_DELAY_MS hovering clears.
+		await act(async () => {
+			timers.advance(150);
+		});
+		expect(result.current.hovering).toBe(false);
+		expect(setInteractiveSpy).toHaveBeenLastCalledWith(true); // still full phase
 	});
 
 	it('keeps newest message first when multiple messages arrive', async () => {

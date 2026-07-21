@@ -4,6 +4,7 @@ import { useAppStore } from '../store/app-store';
 import { resolveReplyRecipient } from '../lib/resolve-reply-recipient';
 import { shouldOpenReplyOnMessageClick } from '../lib/should-open-reply-on-message-click';
 import { useNotchLifecycle, type NotchHistoryEntry } from '../lib/useNotchLifecycle';
+import { resolveNotchResizeHeight } from '../lib/notch-resize-height';
 
 const RING_RADIUS = 8;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
@@ -52,6 +53,50 @@ export default function NotchWidget() {
 				? 'notch-full'
 				: `notch-${phase}`
 		: 'notch-retracted';
+
+	const widgetRef = useRef<HTMLDivElement>(null);
+
+	// Debounce ResizeObserver → notch-resize IPC (display-scaling oscillation guard).
+	const RESIZE_REPORT_DEBOUNCE_MS = 80;
+
+	// Report layout height so the BrowserWindow shrinks/grows to content
+	// (WIN-NOTCH-004). Collapsed peek/retract uses a fixed footprint so hover-leave
+	// cannot leave a tall transparent window masking retract.
+	useEffect(() => {
+		const el = widgetRef.current;
+		if (!el || typeof ResizeObserver === 'undefined') return;
+		let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+		const collapsed =
+			history.length > 0 &&
+			!reopening &&
+			!replyOpen &&
+			(phase === 'peek' || phase === 'retracted');
+		const report = (immediate = false) => {
+			const height = resolveNotchResizeHeight({
+				offsetHeight: el.offsetHeight,
+				historyLength: history.length,
+				phase,
+				reopening,
+				replyOpen,
+			});
+			const send = () => void window.electronAPI.notchResize(height);
+			if (immediate || collapsed) {
+				if (debounceTimer) clearTimeout(debounceTimer);
+				send();
+				return;
+			}
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(send, RESIZE_REPORT_DEBOUNCE_MS);
+		};
+		const debouncedReport = () => report(false);
+		const observer = new ResizeObserver(debouncedReport);
+		observer.observe(el);
+		report(true);
+		return () => {
+			observer.disconnect();
+			if (debounceTimer) clearTimeout(debounceTimer);
+		};
+	}, [history.length, phase, reopening, replyOpen]);
 
 	useEffect(() => {
 		if (!replyingTo) return;
@@ -262,8 +307,39 @@ export default function NotchWidget() {
 		);
 	}
 
+	/**
+	 * Minimized history row (macOS `HistoryRow` parity): one-line, dimmed, small.
+	 * Used for every entry BELOW the primary (newest / currently-replied) message
+	 * so hover history reads as "main message large, past messages small".
+	 */
+	function renderHistoryRowCompact(entry: NotchHistoryEntry) {
+		return (
+			<div
+				key={entry.id}
+				className="history-row-compact"
+				onClick={() => openReply(entry)}
+				title={entry.text}
+			>
+				<span className="hrc-dot" style={{ background: entry.groupColor }} />
+				<span className="hrc-sender">{entry.sender}</span>
+				<span className="hrc-lock">{entry.isDirect ? '🔒' : '🌐'}</span>
+				<span className="hrc-text">{entry.text}</span>
+				<button
+					className="icon-button hrc-copy"
+					onClick={(e) => handleCopyText(entry, e)}
+					aria-label="Copy"
+					title="Copy"
+				>
+					{copiedId === entry.id ? '✓' : '📋'}
+				</button>
+			</div>
+		);
+	}
+
 	return (
 		<div
+			ref={widgetRef}
+			data-testid="notch-widget"
 			className={`notch-widget ${widgetClass}`}
 			onMouseEnter={cancelHoverLeave}
 			onMouseLeave={scheduleHoverLeave}
@@ -281,7 +357,13 @@ export default function NotchWidget() {
 
 			{reopening && history.length > 0 ? (
 				<div className="notch-content">
-					<div className="notch-history-list">{history.map((entry) => renderMessageRow(entry))}</div>
+					<div className="notch-history-list">
+						{history.map((entry, index) =>
+							index === 0 || replyingTo === entry.id
+								? renderMessageRow(entry)
+								: renderHistoryRowCompact(entry),
+						)}
+					</div>
 				</div>
 			) : newest && (phase === 'full' || replyingTo === newest.id) ? (
 				<div className="notch-content">{renderMessageRow(newest)}</div>

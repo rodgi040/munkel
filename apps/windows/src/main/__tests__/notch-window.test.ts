@@ -5,11 +5,31 @@ import { focusNotchForReply, unfocusNotchAfterReply } from '../notch-focus';
 mock.module('electron', () => ({
 	BrowserWindow: class BrowserWindow {},
 	screen: {
-		getPrimaryDisplay: () => ({ workAreaSize: { width: 1440 } }),
+		getPrimaryDisplay: () => ({
+			id: 1,
+			bounds: { x: 0, y: 0, width: 1440, height: 900 },
+			workAreaSize: { width: 1440, height: 900 },
+			scaleFactor: 1,
+		}),
+		getCursorScreenPoint: () => ({ x: 100, y: 100 }),
+		getDisplayNearestPoint: () => ({
+			id: 1,
+			bounds: { x: 0, y: 0, width: 1440, height: 900 },
+			workAreaSize: { width: 1440, height: 900 },
+			scaleFactor: 1,
+		}),
+		getAllDisplays: () => [
+			{
+				id: 1,
+				bounds: { x: 0, y: 0, width: 1440, height: 900 },
+				workAreaSize: { width: 1440, height: 900 },
+				scaleFactor: 1,
+			},
+		],
 	},
 }));
 
-const { requestNotchHide, showNotch } = await import('../notch-window');
+const { requestNotchHide, showNotch, notchPositionForDisplay } = await import('../notch-window');
 
 class FakeTimers {
 	private now = 0;
@@ -62,7 +82,13 @@ function mockNotchWindow(): {
 	focus(): void;
 	blur(): void;
 	showInactive(): void;
+	moveTop(): void;
 	hide(): void;
+	setPosition(x: number, y: number): void;
+	getSize(): [number, number];
+	getBounds(): { x: number; y: number; width: number; height: number };
+	setAlwaysOnTop(flag: boolean, level?: string): void;
+	isVisible(): boolean;
 	webContents: { send(channel: string): void };
 	calls: string[];
 } {
@@ -84,9 +110,21 @@ function mockNotchWindow(): {
 		showInactive: () => {
 			calls.push('showInactive');
 		},
+		moveTop: () => {
+			calls.push('moveTop');
+		},
 		hide: () => {
 			calls.push('hide');
 		},
+		setPosition: (x: number, y: number) => {
+			calls.push(`setPosition:${x},${y}`);
+		},
+		getSize: () => [280, 180],
+		getBounds: () => ({ x: 0, y: 0, width: 280, height: 180 }),
+		setAlwaysOnTop: () => {
+			calls.push('setAlwaysOnTop');
+		},
+		isVisible: () => true,
 		webContents: {
 			send: (channel: string) => {
 				calls.push(`send:${channel}`);
@@ -137,5 +175,16 @@ describe('notch-window', () => {
 		expect((win as unknown as ReturnType<typeof mockNotchWindow>).calls).toContain('send:notch-hide');
 		expect((win as unknown as ReturnType<typeof mockNotchWindow>).calls).toContain('send:notch-show');
 		expect((win as unknown as ReturnType<typeof mockNotchWindow>).calls).not.toContain('hide');
+	});
+});
+
+describe('notchPositionForDisplay', () => {
+	it('centers on the given display bounds including negative offsets', () => {
+		const pos = notchPositionForDisplay(
+			{ bounds: { x: -643, y: -2160, width: 3840, height: 2160 } } as Electron.Display,
+			280,
+		);
+		expect(pos.y).toBe(-2160);
+		expect(pos.x).toBe(Math.round(-643 + (3840 - 280) / 2));
 	});
 });

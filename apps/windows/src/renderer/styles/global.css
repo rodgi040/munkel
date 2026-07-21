@@ -495,9 +495,9 @@ select {
 
 /* Notch widget */
 .notch-widget {
-  min-height: 100%;
-	width: 360px;
-	padding: 26px 18px 18px;
+	/* Content-driven height (no min-height:100% — that forced full window fill). */
+	width: 280px;
+	padding: 26px 14px 14px;
 	background: rgba(8, 8, 10, 0.99);
 	backdrop-filter: blur(20px) saturate(180%);
 	-webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -533,11 +533,12 @@ select {
 }
 
 .notch-widget.notch-peek {
-	transform: translateY(calc(-100% + 18px));
+	/* Expose bottom strip (countdown ring / grabber) — was +18px and easy to miss. */
+	transform: translateY(calc(-100% + 36px));
 }
 
 .notch-widget.notch-retracted {
-	transform: translateY(calc(-100% + 8px));
+	transform: translateY(calc(-100% + 18px));
 }
 
 @keyframes notch-enter {
@@ -558,6 +559,16 @@ select {
 	z-index: 4;
 }
 
+/* Collapsed phases: cover the visible bottom strip so hover can reopen.
+ * The countdown ring / grabber live in that exposed strip, not at top: 0
+ * (which sits above the BrowserWindow viewport and clips). */
+.notch-peek .notch-hover-target,
+.notch-retracted .notch-hover-target {
+	top: auto;
+	bottom: 0;
+	height: 36px;
+}
+
 .notch-full .notch-hover-target,
 .notch-reopened .notch-hover-target {
 	pointer-events: none;
@@ -576,6 +587,12 @@ select {
 	height: 20px;
 	opacity: 1;
 	transition: opacity 0.2s ease-out, transform 0.3s ease;
+}
+
+.notch-peek .notch-sliver,
+.notch-retracted .notch-sliver {
+	top: auto;
+	bottom: 8px;
 }
 
 .notch-full .notch-sliver,
@@ -639,7 +656,8 @@ select {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	max-height: 220px;
+	/* Cap list inside content-driven window; scroll when multiple messages fill. */
+	max-height: 420px;
 	overflow-y: auto;
 	padding-right: 4px;
 }
@@ -648,6 +666,63 @@ select {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+}
+
+/* Minimized past-message row (macOS HistoryRow parity): one line, dimmed. */
+.history-row-compact {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px;
+	border-radius: 8px;
+	cursor: pointer;
+	line-height: 1.25;
+	font-size: 11px;
+}
+
+.history-row-compact:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.history-row-compact .hrc-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+}
+
+.history-row-compact .hrc-sender {
+	flex: none;
+	max-width: 96px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+	color: rgba(255, 255, 255, 0.5);
+}
+
+.history-row-compact .hrc-lock {
+	flex: none;
+	font-size: 9px;
+	opacity: 0.55;
+}
+
+.history-row-compact .hrc-text {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: rgba(255, 255, 255, 0.62);
+}
+
+.history-row-compact .hrc-copy {
+	flex: none;
+	font-size: 11px;
+	opacity: 0;
+}
+
+.history-row-compact:hover .hrc-copy {
+	opacity: 0.7;
 }
 
 .message-row {

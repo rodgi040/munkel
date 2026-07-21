@@ -95,6 +95,8 @@ export interface IpcApi {
 	endNotchReply: () => Promise<void>;
 	notchSetInteractive: (interactive: boolean) => Promise<void>;
 	notchEmpty: () => Promise<void>;
+	/** Report rendered notch content height so main can shrink/grow the window. */
+	notchResize: (contentHeight: number) => Promise<void>;
 
 	checkForUpdates: () => Promise<void>;
 	installUpdate: () => Promise<void>;

@@ -39,7 +39,7 @@ describe('createFakeNotchMessage', () => {
 });
 
 describe('createFakeNotchInjector', () => {
-	it('calls inject after the scheduled delay on start', () => {
+	it('calls inject immediately on start (0ms), then schedules the next delay', () => {
 		const injected: NotchMessage[] = [];
 		const scheduled: Array<{ fn: () => void; ms: number }> = [];
 		const schedule: ScheduleFn = (fn, ms) => {
@@ -61,8 +61,7 @@ describe('createFakeNotchInjector', () => {
 		injector.start();
 		expect(injector.isRunning()).toBe(true);
 		expect(scheduled).toHaveLength(1);
-		expect(scheduled[0]!.ms).toBeGreaterThanOrEqual(5_000);
-		expect(scheduled[0]!.ms).toBeLessThanOrEqual(10_000);
+		expect(scheduled[0]!.ms).toBe(0);
 		expect(injected).toHaveLength(0);
 
 		scheduled[0]!.fn();
@@ -70,8 +69,10 @@ describe('createFakeNotchInjector', () => {
 		expect(injected[0]!.senderMemberId).toBe('test-uuid');
 		expect(injected[0]!.group).toBe('dev-fake');
 		expect(injected[0]!.images).toBeUndefined();
-		// Next tick scheduled recursively
+		// Next tick scheduled recursively with 5–10s jitter
 		expect(scheduled).toHaveLength(2);
+		expect(scheduled[1]!.ms).toBeGreaterThanOrEqual(5_000);
+		expect(scheduled[1]!.ms).toBeLessThanOrEqual(10_000);
 	});
 
 	it('stop clears the pending timeout and prevents further injects', () => {

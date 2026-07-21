@@ -34,6 +34,7 @@ const api: IpcApi = {
 	endNotchReply: () => ipcRenderer.invoke('notch-end-reply'),
 	notchSetInteractive: (interactive) => ipcRenderer.invoke('notch-set-interactive', interactive),
 	notchEmpty: () => ipcRenderer.invoke('notch-empty'),
+	notchResize: (contentHeight) => ipcRenderer.invoke('notch-resize', contentHeight),
 
 	onStateUpdate: (callback) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: StateUpdate) => callback(data);

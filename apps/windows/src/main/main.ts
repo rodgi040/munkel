@@ -2,7 +2,7 @@ import { app, ipcMain, BrowserWindow, IpcMainInvokeEvent, Tray } from 'electron'
 import fs from 'node:fs';
 import path from 'node:path';
 import { createMenuWindow, showMenuWindow, toggleMenuWindow } from './menu-window';
-import { createNotchWindow, showNotch, requestNotchHide, updateNotch } from './notch-window';
+import { createNotchWindow, showNotch, requestNotchHide, resizeNotchToContent, updateNotch } from './notch-window';
 import { focusNotchForReply, unfocusNotchAfterReply } from './notch-focus';
 import { createPaletteWindow, showPalette, hidePalette } from './palette-window';
 import { createTray } from './tray';
@@ -82,6 +82,9 @@ function broadcastState(update: ReturnType<AppState['getState']>): void {
 }
 
 function showNotchMessage(message: import('../shared/types').NotchMessage): void {
+	// Provisional height so the first paint of a full message is not clipped
+	// inside a peek-sized window (ResizeObserver refines within ~80ms).
+	resizeNotchToContent(notchWindow, 120);
 	updateNotch(notchWindow, message);
 	showNotch(notchWindow);
 	notchWindow?.webContents.send('notch-message', message);
@@ -198,6 +201,10 @@ app.whenReady().then(async () => {
 	ipcMain.handle('notch-empty', (event) => {
 		if (BrowserWindow.fromWebContents(event.sender) !== notchWindow) return;
 		requestNotchHide(notchWindow);
+	});
+	ipcMain.handle('notch-resize', (event, contentHeight: number) => {
+		if (BrowserWindow.fromWebContents(event.sender) !== notchWindow) return;
+		resizeNotchToContent(notchWindow, contentHeight);
 	});
 	ipcMain.handle('start-github-login', async () => {
 		githubLoginService.startGitHubLogin();

@@ -127,7 +127,8 @@ export function createFakeNotchInjector(deps: FakeNotchInjectorDeps): FakeNotchI
 		start() {
 			if (disposed || running) return;
 			running = true;
-			timerId = schedule(tick, delayMs(rng));
+			// Immediate first message, then 5–10s jitter between subsequent ones.
+			timerId = schedule(tick, 0);
 		},
 		stop() {
 			running = false;
