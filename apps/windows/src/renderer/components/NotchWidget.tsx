@@ -4,6 +4,7 @@ import { TickerText } from './TickerText';
 import ImagePreviewOverlay from './ImagePreviewOverlay';
 import { useAppStore } from '../store/app-store';
 import { resolveReplyRecipient } from '../lib/resolve-reply-recipient';
+import { resolveNotchSender } from '../lib/resolve-notch-sender';
 import { shouldOpenReplyOnMessageClick } from '../lib/should-open-reply-on-message-click';
 import { useNotchLifecycle, type NotchHistoryEntry } from '../lib/useNotchLifecycle';
 import type { IncomingImage } from '../../shared/types';
@@ -58,7 +59,7 @@ function firstLoadedImageBase64(entry: NotchHistoryEntry, fullImages: Map<string
 }
 
 export default function NotchWidget() {
-	const { sendChat } = useAppStore();
+	const { sendChat, state } = useAppStore();
 
 	const [replyText, setReplyText] = useState('');
 	const [replyPrivate, setReplyPrivate] = useState(false);
@@ -603,7 +604,7 @@ export default function NotchWidget() {
 			if (sentConfirmationTimerRef.current) clearTimeout(sentConfirmationTimerRef.current);
 			setSentConfirmation({
 				entryId: entry.id,
-				label: recipient.to !== undefined ? `Sent to ${entry.sender}` : 'Sent to all',
+				label: recipient.to !== undefined ? `Sent to ${senderFor(entry)}` : 'Sent to all',
 			});
 			const targetEntryId = entry.id;
 			sentConfirmationTimerRef.current = setTimeout(() => {
@@ -656,11 +657,16 @@ export default function NotchWidget() {
 	 * two are mutually exclusive per row: history rows never get the ticker,
 	 * and the single-message view never gets the chevron-driven ellipsis.
 	 */
+	function senderFor(entry: NotchHistoryEntry): string {
+		return resolveNotchSender(entry, state.circles);
+	}
+
 	function renderMessageRow(entry: NotchHistoryEntry, options?: { pulse?: boolean; collapsible?: boolean }) {
 		const hasImages = !!entry.images?.length;
 		const replying = replyingTo === entry.id;
 		const collapsible = options?.collapsible ?? false;
 		const collapsed = collapsible && !expandedHistoryIds.has(entry.id);
+		const sender = senderFor(entry);
 
 		return (
 			<div
@@ -671,7 +677,7 @@ export default function NotchWidget() {
 				onMouseLeave={() => setHoveredEntryId((current) => (current === entry.id ? null : current))}
 			>
 				<div className="message-row">
-					<Avatar name={entry.sender} size={40} pulse={options?.pulse ?? false} />
+					<Avatar name={sender} size={40} pulse={options?.pulse ?? false} />
 					<div
 						className="message-body"
 						onPointerDown={(e) => {
@@ -680,7 +686,7 @@ export default function NotchWidget() {
 						onClick={(e) => openReplyFromMessage(entry, e)}
 					>
 						<div className="message-meta">
-							<span className="sender">{entry.sender}</span>
+							<span className="sender">{sender}</span>
 							<span>{entry.isDirect ? '🔒' : '🌐'}</span>
 							<span>·</span>
 							<span className="circle-dot" style={{ background: entry.groupColor }} />
@@ -764,7 +770,7 @@ export default function NotchWidget() {
 								<input
 									ref={replyInputRef}
 									className="frosted-field"
-									placeholder={replyPrivate ? `Private to ${entry.sender}…` : 'Reply to all…'}
+									placeholder={replyPrivate ? `Private to ${sender}…` : 'Reply to all…'}
 									value={replyText}
 									maxLength={MAX_MESSAGE_CHARS}
 									onChange={(e) => {
@@ -796,12 +802,13 @@ export default function NotchWidget() {
 	}
 
 	function renderPreview(entry: NotchHistoryEntry) {
+		const sender = senderFor(entry);
 		return (
 			<div className="preview-row">
-				<Avatar name={entry.sender} size={40} />
+				<Avatar name={sender} size={40} />
 				<div className="preview-body">
 					<div className="message-meta">
-						<span className="sender">{entry.sender}</span>
+						<span className="sender">{sender}</span>
 						<span className="circle-dot" style={{ background: entry.groupColor }} />
 						<span className="circle-name">{entry.group}</span>
 					</div>
