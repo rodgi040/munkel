@@ -917,16 +917,16 @@ export default function NotchWidget() {
 			</div>
 
 			{previewImage && (
-				<div className="image-preview-overlay" onClick={closePreview}>
-					<div className="image-preview-backdrop" />
-					<div className="image-preview-card" onClick={(e) => e.stopPropagation()}>
+				<div className="image-lightbox-overlay" onClick={closePreview}>
+					<div className="image-lightbox-backdrop" />
+					<div className="image-lightbox-card" onClick={(e) => e.stopPropagation()}>
 						{previewLoading && !fullImage && (
-							<div className="image-preview-spinner">
+							<div className="image-lightbox-spinner">
 								<span className="spinner" />
 							</div>
 						)}
 						{previewError && (
-							<div className="image-preview-error">⚠️ {previewError}</div>
+							<div className="image-lightbox-error">⚠️ {previewError}</div>
 						)}
 						{fullImage && (
 							<img

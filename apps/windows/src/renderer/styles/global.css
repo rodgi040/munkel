@@ -1360,7 +1360,7 @@ select {
 	cursor: zoom-in;
 }
 
-.image-preview-overlay {
+.image-lightbox-overlay {
 	position: fixed;
 	inset: 0;
 	display: flex;
@@ -1369,13 +1369,13 @@ select {
 	z-index: 100;
 }
 
-.image-preview-backdrop {
+.image-lightbox-backdrop {
 	position: absolute;
 	inset: 0;
 	background: rgba(0, 0, 0, 0.6);
 }
 
-.image-preview-card {
+.image-lightbox-card {
 	position: relative;
 	max-width: calc(100vw - 2 * var(--notch-gutter, 80px));
 	max-height: calc(100vh - 2 * var(--notch-gutter, 80px));
@@ -1385,14 +1385,14 @@ select {
 	border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.image-preview-card img {
+.image-lightbox-card img {
 	display: block;
 	max-width: 100%;
 	max-height: 100%;
 	object-fit: contain;
 }
 
-.image-preview-spinner {
+.image-lightbox-spinner {
 	position: absolute;
 	inset: 0;
 	display: flex;
@@ -1401,7 +1401,7 @@ select {
 	background: rgba(0, 0, 0, 0.35);
 }
 
-.image-preview-error {
+.image-lightbox-error {
 	position: absolute;
 	inset: 0;
 	display: flex;
