@@ -714,6 +714,51 @@ describe('GroupSession', () => {
 		session.disconnect();
 	});
 
+	test('sends an under-cap emoji chat intact, not truncated by UTF-16 code units (#51)', async () => {
+		const wss = startServer();
+		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
+		const code = 'emoji-river';
+		const { messageKey } = await deriveGroupKeys(code);
+
+		const session = await GroupSession.create(
+			code,
+			relayUrl,
+			memberId,
+			{ displayName: 'Windows User', presenceStatus: 'online' },
+			{
+				onStateChange: () => {},
+				onChat: () => {},
+				onNotch: () => {},
+				getColorIndex: () => 0,
+			},
+		);
+		session.connect();
+
+		await waitFor(() => serverSocket !== null);
+
+		const frames: unknown[] = [];
+		serverSocket!.on('message', (data) => {
+			frames.push(JSON.parse(data.toString()));
+		});
+
+		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
+		await waitFor(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
+
+		const emojiText = '😀'.repeat(1500);
+		const sent = await session.sendChat(emojiText);
+		expect(sent).toEqual({ ok: true });
+
+		await waitFor(() => frames.length >= 2);
+		const chatFrame = frames[1] as { type: string; payload: string };
+		expect(chatFrame.type).toBe('send');
+
+		const plaintext = await decrypt(chatFrame.payload, messageKey);
+		expect(plaintext.kind).toBe('chat');
+		expect(plaintext.text).toBe(emojiText);
+
+		session.disconnect();
+	});
+
 	test('decrypts incoming image albums and fires onNotch with images[]', async () => {
 		const wss = startServer();
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;

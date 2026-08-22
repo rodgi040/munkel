@@ -8,7 +8,7 @@ import { homedir } from "node:os"
 import { basename, join, resolve as resolvePath } from "node:path"
 import { readControlPipeName, type ControlGroupInfo, type ControlRequest, type ControlResponse } from "@munkel/shared-wire/control"
 import { createControlClient, type ControlClient } from "@munkel/shared-wire/transport"
-import { MAX_MESSAGE_CHARS } from "@munkel/shared-wire/message-limits"
+import { MAX_MESSAGE_CHARS, clampMessageText } from "@munkel/shared-wire/message-limits"
 
 // `MUNKEL_DEV=1` (or a binary named `munkel-dev`) targets the parallel "Munkel
 // Dev" app instead of the installed release — its own control socket and bundle
@@ -63,8 +63,8 @@ const MAX_IMAGES = 8
 // only needed for shell metacharacters.
 function joinMessage(parts: string[]): string {
   const text = parts.join(" ")
-  if (text.length > MAX_MESSAGE_CHARS) {
-    fail(`message too long (${text.length} > ${MAX_MESSAGE_CHARS} characters)`, 64)
+  if (clampMessageText(text) !== text) {
+    fail(`message too long (max ${MAX_MESSAGE_CHARS} characters)`, 64)
   }
   return text
 }

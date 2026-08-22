@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createControlServer } from "@munkel/shared-wire/transport"
 import type { ControlResponse } from "@munkel/shared-wire/control"
+import { MAX_MESSAGE_CHARS } from "@munkel/shared-wire/message-limits"
 
 // Runs the CLI as a subprocess against a fake app listening on a temporary
 // Unix socket (MUNKEL_SOCKET overrides the default path).
@@ -293,6 +294,29 @@ test("dm with no message is a usage error", async () => {
 
   expect(result.exitCode).toBe(64)
   expect(result.stderr).toContain("usage: munkel dm")
+})
+
+test("dm rejects a message over MAX_MESSAGE_CHARS", async () => {
+  const result = await runMunkel(["dm", "sebil", "x".repeat(MAX_MESSAGE_CHARS + 1)])
+
+  expect(result.exitCode).toBe(64)
+  expect(result.stderr).toContain("message too long")
+})
+
+test("dm accepts 1500 emoji graphemes even though they are 3000 UTF-16 code units (#51)", async () => {
+  const app = fakeApp(() => ({ ok: true }))
+  const text = "😀".repeat(1500)
+  const result = await runMunkel(["dm", "sebil", text], app.socketPath)
+
+  expect(result.exitCode).toBe(0)
+  expect(app.requests).toEqual([{ action: "send", to: "sebil", text }])
+})
+
+test("dm rejects a message over MAX_MESSAGE_CHARS counted in emoji graphemes, not UTF-16 code units (#51)", async () => {
+  const result = await runMunkel(["dm", "sebil", "😀".repeat(MAX_MESSAGE_CHARS + 1)])
+
+  expect(result.exitCode).toBe(64)
+  expect(result.stderr).toContain("message too long")
 })
 
 test("image sends a recipient-only request carrying the resolved file path", async () => {

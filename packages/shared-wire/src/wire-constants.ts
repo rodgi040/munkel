@@ -5,6 +5,8 @@
  * See {@link ../PROTOCOL.md} for the full Munkel wire protocol v1 spec.
  */
 
+import { MAX_MESSAGE_CHARS } from './message-limits.js';
+
 /** Client-generated per-image object id: URL-safe, 16–128 chars. */
 export const BLOB_KEY_REGEX = /^[A-Za-z0-9_-]{16,128}$/;
 
@@ -14,5 +16,11 @@ export const MAX_BLOB_BYTES = 3 * 1024 * 1024;
 /** Base64 ciphertext cap — keeps relay frames well under the 64 KiB budget. */
 export const MAX_PAYLOAD_CHARS = 48 * 1024;
 
-/** Max plaintext characters for a chat message (mirrors macOS MessageLimits). */
-export const MAX_CHAT_CHARS = 2048;
+/**
+ * Max plaintext characters for a chat message. Alias of
+ * {@link MAX_MESSAGE_CHARS} from `./message-limits.js` — kept as a separate
+ * export name for existing callers/tests, but re-exported rather than
+ * redeclared so the two names can never drift apart in value *or* in unit
+ * (grapheme clusters, not UTF-16 code units — see `message-limits.ts`).
+ */
+export const MAX_CHAT_CHARS = MAX_MESSAGE_CHARS;
