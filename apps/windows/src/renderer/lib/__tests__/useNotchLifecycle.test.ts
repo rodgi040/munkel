@@ -215,7 +215,6 @@ describe('useNotchLifecycle', () => {
 			result.current.reopenFromHoverTarget();
 		});
 		expect(result.current.ui).toBe('open');
-		expect(result.current.previewing).toBe(false);
 		expect(result.current.reopening).toBe(true);
 		expect(result.current.phase).toBe('peek');
 		expect(setInteractiveSpy).toHaveBeenLastCalledWith(true);
@@ -232,27 +231,6 @@ describe('useNotchLifecycle', () => {
 
 		await act(async () => {
 			result.current.reopenFromHoverTarget();
-		});
-		expect(result.current.ui).toBe('open');
-		expect(result.current.reopening).toBe(true);
-	});
-
-	it('openFromPreview keeps history open after hover reopen', async () => {
-		const { result } = renderHook(useNotchLifecycle);
-
-		await act(async () => {
-			result.current.onNotchMessage(makeMessage());
-		});
-		await act(async () => {
-			timers.advance(5_000);
-		});
-		await act(async () => {
-			result.current.reopenFromHoverTarget();
-		});
-		expect(result.current.ui).toBe('open');
-
-		await act(async () => {
-			result.current.openFromPreview();
 		});
 		expect(result.current.ui).toBe('open');
 		expect(result.current.reopening).toBe(true);
@@ -291,9 +269,6 @@ describe('useNotchLifecycle', () => {
 		await act(async () => {
 			result.current.reopenFromHoverTarget();
 		});
-		await act(async () => {
-			result.current.openFromPreview();
-		});
 		expect(result.current.ui).toBe('open');
 
 		await act(async () => {
@@ -314,7 +289,6 @@ describe('useNotchLifecycle', () => {
 		});
 		await act(async () => {
 			result.current.reopenFromHoverTarget();
-			result.current.openFromPreview();
 		});
 		expect(result.current.ui).toBe('open');
 
@@ -348,7 +322,6 @@ describe('useNotchLifecycle', () => {
 		});
 		await act(async () => {
 			result.current.reopenFromHoverTarget();
-			result.current.openFromPreview();
 		});
 		expect(result.current.ui).toBe('open');
 
@@ -601,9 +574,6 @@ describe('useNotchLifecycle', () => {
 
 		await act(async () => {
 			result.current.reopenFromHoverTarget();
-		});
-		await act(async () => {
-			result.current.openFromPreview();
 		});
 		expect(result.current.ui).toBe('open');
 		expect(result.current.reopening).toBe(true);

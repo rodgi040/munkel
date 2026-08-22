@@ -8,7 +8,7 @@ export interface NotchHistoryEntry extends NotchMessage {
 	id: string;
 }
 
-export type NotchUiState = 'collapsed' | 'preview' | 'open';
+export type NotchUiState = 'collapsed' | 'open';
 
 const HOVER_LEAVE_DELAY_MS = 150;
 /** Failsafe when Windows drops mouseleave under click-through. */
@@ -28,7 +28,6 @@ export interface UseNotchLifecycleReturn {
 	newest: NotchHistoryEntry | null;
 	phase: NotchPhase;
 	ui: NotchUiState;
-	previewing: boolean;
 	reopening: boolean;
 	replyOpen: boolean;
 	replyingTo: string | null;
@@ -52,7 +51,6 @@ export interface UseNotchLifecycleReturn {
 	scheduleHoverLeave: () => void;
 	cancelHoverLeave: () => void;
 	reopenFromHoverTarget: () => void;
-	openFromPreview: () => void;
 }
 
 export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMemberId?: string }): UseNotchLifecycleReturn {
@@ -84,7 +82,6 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 
 	const newest = history.find((entry) => !entry.isOwn) ?? null;
 	const reopening = ui === 'open';
-	const previewing = ui === 'preview';
 	const replyOpen = replyingTo !== null;
 	// A dot only makes sense once the notch has actually retracted with an
 	// unread message sitting behind it — not while it's still visible
@@ -122,13 +119,6 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 		leaveSuppressedRef.current = false;
 		collapseUiSoon();
 	}, [replyOpen, collapseUiSoon]);
-
-	const openFromPreview = useCallback(() => {
-		cancelHoverLeave();
-		setUi('open');
-		setHovering(true);
-		setInteracted(true);
-	}, [cancelHoverLeave]);
 
 	const reopenFromHoverTarget = useCallback(() => {
 		if (history.length === 0) return;
@@ -355,7 +345,6 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 		newest,
 		phase,
 		ui,
-		previewing,
 		reopening,
 		replyOpen,
 		replyingTo,
@@ -370,6 +359,5 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 		scheduleHoverLeave,
 		cancelHoverLeave,
 		reopenFromHoverTarget,
-		openFromPreview,
 	};
 }
