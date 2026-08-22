@@ -208,7 +208,6 @@ export default function NotchWidget() {
 		scheduleHoverLeave,
 		cancelHoverLeave,
 		reopenFromHoverTarget,
-		openFromPreview,
 	} = lifecycle;
 
 	// Report layout height so the BrowserWindow shrinks/grows to content
@@ -263,9 +262,7 @@ export default function NotchWidget() {
 			? ui === 'open'
 				? 'notch-reopened'
 				: 'notch-full'
-			: ui === 'preview'
-				? 'notch-preview'
-				: `notch-${phase}`
+			: `notch-${phase}`
 		: 'notch-retracted';
 
 	// Full-resolution image cache (Plan 14 / OQ4), keyed by r2Key and shared
@@ -849,23 +846,6 @@ export default function NotchWidget() {
 		);
 	}
 
-	function renderPreview(entry: NotchHistoryEntry) {
-		const sender = senderFor(entry);
-		return (
-			<div className="preview-row">
-				<Avatar name={sender} size={40} />
-				<div className="preview-body">
-					<div className="message-meta">
-						<span className="sender">{sender}</span>
-						<span className="circle-dot" style={{ background: entry.groupColor }} />
-						<span className="circle-name">{entry.group}</span>
-					</div>
-					<p className="preview-text">{entry.text}</p>
-				</div>
-			</div>
-		);
-	}
-
 	return (
 		<div
 			ref={widgetRef}
@@ -908,10 +888,6 @@ export default function NotchWidget() {
 						{renderMessageRow(history.find((e) => e.id === replyingTo) ?? newest, {
 							pulse: !replyingTo,
 						})}
-					</div>
-				) : ui === 'preview' && newest ? (
-					<div className="notch-preview-content" onClick={openFromPreview}>
-						{renderPreview(newest)}
 					</div>
 				) : null}
 			</div>

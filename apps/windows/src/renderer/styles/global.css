@@ -717,49 +717,6 @@ select {
 	transform: translateY(calc(-100% + 12px));
 }
 
-.notch-widget.notch-preview {
-	transform: translateY(calc(-100% + 110px));
-}
-
-.notch-preview .notch-sliver {
-	opacity: 1;
-	transform: translate(-50%, 0);
-}
-
-.notch-preview-content {
-	display: flex;
-	flex-direction: column;
-	padding: 10px 2px 18px;
-	cursor: pointer;
-}
-
-.preview-row {
-	display: flex;
-	align-items: flex-start;
-	gap: 12px;
-}
-
-.preview-body {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.preview-text {
-	margin: 0;
-	font-size: 14px;
-	font-weight: 500;
-	line-height: 1.35;
-	color: var(--munkel-text);
-	max-height: 2.7em;
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
-}
-
 @keyframes notch-enter {
 	from {
 		transform: translateY(-18px) scaleY(0.92);
@@ -780,8 +737,7 @@ select {
 }
 
 .notch-full .notch-hover-target,
-.notch-reopened .notch-hover-target,
-.notch-preview .notch-hover-target {
+.notch-reopened .notch-hover-target {
 	pointer-events: none;
 }
 
