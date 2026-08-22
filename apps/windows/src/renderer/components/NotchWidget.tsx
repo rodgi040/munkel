@@ -162,6 +162,7 @@ export default function NotchWidget() {
 	const [previewError, setPreviewError] = useState<string | null>(null);
 	const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
 	const fullImageCache = useRef<Map<string, { data: string; mime: string }>>(new Map());
+	const previewEpoch = useRef(0);
 
 	const handleNotchHide = useCallback(() => {
 		setReplyText('');
@@ -520,6 +521,7 @@ export default function NotchWidget() {
 	}, [previewImage]);
 
 	function openPreview(group: string, img: IncomingImage, e: React.MouseEvent) {
+		const epoch = ++previewEpoch.current;
 		e.stopPropagation();
 		setPreviewImage(img);
 		setPreviewError(null);
@@ -531,18 +533,29 @@ export default function NotchWidget() {
 		}
 		setPreviewLoading(true);
 		setFullImage(null);
-		window.electronAPI.fetchFullImage(group, img.id).then((res) => {
-			setPreviewLoading(false);
-			if (res.ok) {
-				fullImageCache.current.set(img.id, { data: res.data, mime: res.mime });
-				setFullImage({ data: res.data, mime: res.mime });
-			} else {
-				setPreviewError(res.error);
-			}
-		});
+		window.electronAPI
+			.fetchFullImage(group, img.id)
+			.then((res) => {
+				if (res.ok) {
+					fullImageCache.current.set(img.id, { data: res.data, mime: res.mime });
+				}
+				if (epoch !== previewEpoch.current) return;
+				setPreviewLoading(false);
+				if (res.ok) {
+					setFullImage({ data: res.data, mime: res.mime });
+				} else {
+					setPreviewError(res.error);
+				}
+			})
+			.catch((err) => {
+				if (epoch !== previewEpoch.current) return;
+				setPreviewLoading(false);
+				setPreviewError(err instanceof Error ? err.message : String(err));
+			});
 	}
 
 	function closePreview() {
+		previewEpoch.current += 1;
 		setPreviewImage(null);
 		setFullImage(null);
 		setPreviewError(null);
