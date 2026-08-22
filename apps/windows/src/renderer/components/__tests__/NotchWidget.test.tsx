@@ -2071,7 +2071,7 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 			return Promise.resolve();
 		};
 
-		const overlay = root.root.findByProps({ className: 'image-preview-overlay' });
+		const overlay = root.root.findByProps({ className: 'image-lightbox-overlay' });
 		await act(async () => {
 			overlay.props.onClick();
 		});
