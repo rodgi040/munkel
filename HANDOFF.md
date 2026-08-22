@@ -1,3 +1,66 @@
+# Handoff — munkel (2026-08-22)
+
+> **Wiederaufsetz-Punkt (2026-08-22) — beide Release-Blocker geschlossen, Issue-Abarbeitung läuft.**
+> Ältere Abschnitte bleiben historischer Record.
+
+## current_state
+
+- **Branch:** `platform/windows/v2-clean`, Tip `527a0f0` (bzw. der Merge von PR #68, falls schon durch).
+- **Teststand:** 682 pass / 0 fail in `apps/windows`, 32 in `apps/cli`, 32 in `packages/shared-wire`. Typecheck (main + renderer) grün, CI dreifach grün.
+- **GitHub-Issues sind jetzt aktiviert** (waren im Fork deaktiviert), Labels: `windows`, `severity: major`, `severity: minor`, `security`, `release-blocker`, `verified`.
+
+## completed (diese Session)
+
+**Merge-Runde:** PR #48 (origin-drift), #47 (notch history/preview); #46 als redundant geschlossen; zwei Altbranches als `archive/*`-Tags gesichert und gelöscht; lokaler `v2-clean` entdriftet.
+
+**Release-Review** über fünf Cursor-Agents, jeder Befund einzeln gegen den Code geprüft (von 5 gemeldeten CRITICAL/HIGH hielten 2 stand). Report: https://claude.ai/code/artifact/3091a488-7f90-4c6d-b4d4-fdae2a9c2639
+
+**Beide Release-Blocker geschlossen:**
+1. **#58 / PR #49** (`c69e8be`) — Versions-Drift. `apps/windows/package.json` stand auf `0.0.1`; electron-builder leitet daraus Installer-Name und `latest.yml` ab, also hätte Auto-Update ab Release 1 nie gegriffen. `scripts/pack-release.mjs` patcht aus `MUNKEL_VERSION` und stellt den Pin im `finally` zurück. Tag `windows/fix/release-version-from-tag`.
+2. **#59 / PR #50** (`d6097bb`) — Click-Through-Autorität. Zwei Preview-Systeme steuerten dieselbe Fenster-Eigenschaft; `exitPreviewMode` setzte `setIgnoreMouseEvents(true)` hart. System B gelöscht statt umverdrahtet. Tag `windows/fix/single-click-through-authority`.
+
+**Issues abgearbeitet:**
+- **#52 / PR #63** (`4c38884`) — CSS-Kollision: vier Klassen doppelt definiert, das Hover-Overlay überschrieb das Klick-Lightbox inklusive `pointer-events: none`. Klick-Seite auf `image-lightbox-*` umbenannt.
+- **#57 / PR #65** (`bcfa94d`) — verwaister `'preview'`-Zustand samt `openFromPreview`, `renderPreview`, 7 CSS-Regeln, 6 Teststellen; 113 Zeilen entfernt.
+- **#51 / PR #66** (`527a0f0`) — Emoji-Kürzung: `MAX_CHAT_CHARS` zählte Code-Units, `MAX_MESSAGE_CHARS` Grapheme. `encodeChat` nutzt jetzt `clampMessageText`, `MAX_CHAT_CHARS` ist Alias. **Die CLI war ebenfalls betroffen** und lehnte gültige Nachrichten ab.
+- **#55 / PR #68** (`eaea5e2`) — blob-download-Timeout. Der erste Entwurf raste nur den `fetch`-Aufruf, wodurch ein nach den Headern stockender Body ungeschützt blieb; jetzt umspannt der Timeout die ganze Anfrage. Renderer bekam einen Epoch-Fence gegen veraltete Antworten. Tag `windows/fix/blob-download-timeout`.
+
+**Neu gefunden und erfasst:** #64 (`ImagePreviewOverlay` importiert, nie gerendert — Plan-14-Feature nicht verdrahtet), #67 (flaky Tests unter Last, zweifach unabhängig beobachtet).
+
+## remaining (in Reihenfolge)
+
+1. **#56** Update-Wedge — als Nächstes dran.
+2. **#56** Details: `installing` bleibt `true`, wenn `quitAndInstall` still fehlschlägt, und blockiert danach `confirmInstall`, `declineInstall` und `check` bis zum Neustart.
+3. **#54** Album-`readFile` vor dem Size-Guard — `stat()` davor; dazu die offene Frage all-or-nothing vs. partial (macOS sendet den Rest).
+4. **#62** Tag-Governance — ein `v*`-Tag auf beliebigem Branch löst ein Release aus.
+5. **#64** — **zuerst die Merge-Historie prüfen**, die Render-Stelle ist vermutlich wiederherstellbar statt neu zu schreiben.
+6. **#67** — Testnamen unter absichtlicher Last einfangen, nicht in Isolation suchen.
+
+## decisions
+
+- **Arbeitsteilung, die in dieser Umgebung trägt:** Grok 4.6 (Cursor CLI) **plant** — der Kontext muss inline im Prompt stehen, weil seine Tool-Calls an den globalen PreToolUse-Hooks scheitern. Sonnet-Subagent **setzt um**. Kimi/DeepSeek V4 Pro über `bash ~/.claude/agents/delegate.sh --to kimi --readonly --model ds` **verifiziert** — der kann Tools nutzen und echte Testläufe fahren.
+- **Red/Green-Nachweis vor jedem Merge:** den Fix testweise zurückdrehen und zeigen, dass genau die neuen Tests umfallen. Hat mehrfach Lücken aufgedeckt, die grüne Tests nicht zeigten — zuletzt bei #55, wo vier grüne Tests den Body-Stall nicht abdeckten.
+- **Vor Red/Green-Experimenten committen.** `git checkout -- <datei>` setzt auf HEAD zurück und löscht uncommittete Executor-Arbeit; einmal passiert, nur dank des vorher gelesenen Diffs rekonstruierbar gewesen.
+- **Merge-Marker ohne `v`-Präfix taggen** (`windows/fix/…`), sonst feuert `release.yml`. Siehe #62.
+
+## blockers
+
+- **#60 Authenticode** — Zertifikatsbeschaffung (OV vs. EV), reine Nutzerentscheidung.
+- **#61 Uninstall-Politik** für `%APPDATA%\munkel` — Produktentscheidung.
+- **#53 Named-Pipe-DACL** — Architekturentscheidung: natives Modul für eine echte DACL vs. Shared-Secret-Handshake. Empfehlung: Shared Secret, weil eine neue native Dependency in einem Krypto-nahen Projekt schwerer wiegt.
+
+## next_action
+
+**#56** mit dem etablierten Dreischritt: Grok plant (Kontext inline), Sonnet setzt um, Kimi verifiziert, eigener Red/Green-Nachweis, Commit, PR, Merge.
+
+## suggested_skills
+
+- `/fp-resume`
+- `delegate` — für Cursor/Kimi-Aufrufe, immer über `delegate.sh`, nie `herdr` direkt
+- `gh pr create` gegen `platform/windows/v2-clean` (`--repo rodgi040/munkel`)
+
+---
+
 # Handoff — munkel (2026-08-18)
 
 > **Wiederaufsetz-Punkt (2026-08-18) — Origin-Drift-Follow-up lokal grün; Branch committen+pushen, PR als Nächstes, kein Merge.**
