@@ -10,6 +10,14 @@
  * `GroupSession.maxIncomingImageBytes` (3 MiB + small envelope headroom —
  * we use the shared `MAX_BLOB_BYTES` which already includes envelope room
  * over the 2 MiB client `MAX_FULL_BYTES`).
+ *
+ * `downloadBlob` always settles — the whole request, including a body that
+ * stalls after the response headers arrive, is raced against `timeoutMs`
+ * (default `BLOB_DOWNLOAD_TIMEOUT_MS`) so callers never hang forever on a
+ * stuck GET. 30s sits well under the relay's ~66s blob TTL:
+ * that TTL is a server object lifetime, not a UX budget, so waiting longer
+ * is pointless once the object is due to expire anyway, while 30s is still
+ * enough headroom for a multi-MB image over a slow connection.
  */
 
 import { MAX_BLOB_BYTES } from '@munkel/shared-wire/wire-constants';
@@ -23,10 +31,14 @@ export interface DownloadResult {
 	error?: string;
 }
 
+export const BLOB_DOWNLOAD_TIMEOUT_MS = 30_000;
+
 /**
  * GET sealed ciphertext from `<relay>/blob/<groupId>/<r2Key>`.
  * Returns `{ok:true, body}` on 200 with a non-empty body ≤ maxBytes;
  * otherwise a structured failure (never throws on HTTP/network errors).
+ * Always settles within `timeoutMs`, even if `fetchImpl` never resolves or
+ * the body stalls after the response headers arrive.
  */
 export async function downloadBlob(
 	relayUrl: string,
@@ -34,6 +46,7 @@ export async function downloadBlob(
 	r2Key: string,
 	maxBytes: number = MAX_BLOB_BYTES,
 	fetchImpl: typeof fetch = fetch,
+	timeoutMs: number = BLOB_DOWNLOAD_TIMEOUT_MS,
 ): Promise<DownloadResult> {
 	if (!groupId || !r2Key) {
 		return { ok: false, error: 'Missing groupId or r2Key' };
@@ -43,55 +56,80 @@ export async function downloadBlob(
 	}
 
 	const url = `${blobBaseUrl(relayUrl)}blob/${groupId}/${r2Key}`;
-	let res: Response;
+	const controller = new AbortController();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+
+	async function run(): Promise<DownloadResult> {
+		let res: Response;
+		try {
+			res = await fetchImpl(url, { method: 'GET', signal: controller.signal });
+		} catch (err) {
+			if (controller.signal.aborted) {
+				return { ok: false, error: 'Blob download timed out' };
+			}
+			return {
+				ok: false,
+				error: `Blob download failed: ${err instanceof Error ? err.message : String(err)}`,
+			};
+		}
+
+		if (res.status !== 200) {
+			const text = await res.text().catch(() => '');
+			return {
+				ok: false,
+				status: res.status,
+				error: `Blob download failed (${res.status}): ${text || res.statusText}`,
+			};
+		}
+
+		const declared = Number(res.headers.get('content-length'));
+		if (Number.isFinite(declared) && declared > maxBytes) {
+			return {
+				ok: false,
+				status: res.status,
+				error: `Blob too large (declared ${declared} bytes; max ${maxBytes})`,
+			};
+		}
+
+		let buf: ArrayBuffer;
+		try {
+			buf = await res.arrayBuffer();
+		} catch (err) {
+			if (controller.signal.aborted) {
+				return { ok: false, status: res.status, error: 'Blob download timed out' };
+			}
+			return {
+				ok: false,
+				status: res.status,
+				error: `Blob download read failed: ${err instanceof Error ? err.message : String(err)}`,
+			};
+		}
+
+		if (buf.byteLength === 0) {
+			return { ok: false, status: res.status, error: 'Empty blob body' };
+		}
+		if (buf.byteLength > maxBytes) {
+			return {
+				ok: false,
+				status: res.status,
+				error: `Blob too large (${buf.byteLength} bytes; max ${maxBytes})`,
+			};
+		}
+
+		return { ok: true, status: res.status, body: new Uint8Array(buf) };
+	}
+
 	try {
-		res = await fetchImpl(url, { method: 'GET' });
-	} catch (err) {
-		return {
-			ok: false,
-			error: `Blob download failed: ${err instanceof Error ? err.message : String(err)}`,
-		};
+		const timeout = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => {
+				controller.abort();
+				reject(new Error('Blob download timed out'));
+			}, timeoutMs);
+		});
+		return await Promise.race([run(), timeout]);
+	} catch {
+		return { ok: false, error: 'Blob download timed out' };
+	} finally {
+		clearTimeout(timer);
 	}
-
-	if (res.status !== 200) {
-		const text = await res.text().catch(() => '');
-		return {
-			ok: false,
-			status: res.status,
-			error: `Blob download failed (${res.status}): ${text || res.statusText}`,
-		};
-	}
-
-	const declared = Number(res.headers.get('content-length'));
-	if (Number.isFinite(declared) && declared > maxBytes) {
-		return {
-			ok: false,
-			status: res.status,
-			error: `Blob too large (declared ${declared} bytes; max ${maxBytes})`,
-		};
-	}
-
-	let buf: ArrayBuffer;
-	try {
-		buf = await res.arrayBuffer();
-	} catch (err) {
-		return {
-			ok: false,
-			status: res.status,
-			error: `Blob download read failed: ${err instanceof Error ? err.message : String(err)}`,
-		};
-	}
-
-	if (buf.byteLength === 0) {
-		return { ok: false, status: res.status, error: 'Empty blob body' };
-	}
-	if (buf.byteLength > maxBytes) {
-		return {
-			ok: false,
-			status: res.status,
-			error: `Blob too large (${buf.byteLength} bytes; max ${maxBytes})`,
-		};
-	}
-
-	return { ok: true, status: res.status, body: new Uint8Array(buf) };
 }

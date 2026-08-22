@@ -90,4 +90,52 @@ describe('downloadBlob', () => {
 		expect((await downloadBlob('ws://relay/ws', '', 'key', MAX_BLOB_BYTES, fetchImpl)).ok).toBe(false);
 		expect((await downloadBlob('ws://relay/ws', 'gid', '', MAX_BLOB_BYTES, fetchImpl)).ok).toBe(false);
 	});
+
+	it('times out instead of hanging forever when fetch never settles', async () => {
+		const fetchImpl = mockFetch(() => new Promise<Response>(() => {}));
+		const result = await downloadBlob('ws://relay/ws', 'gid', 'key', MAX_BLOB_BYTES, fetchImpl, 20);
+		expect(result.ok).toBe(false);
+		expect(result.error).toMatch(/timed out/);
+	});
+
+	it('still succeeds when fetch resolves before the timeout', async () => {
+		const payload = new Uint8Array([1, 2, 3]);
+		const fetchImpl = mockFetch(async () => new Response(payload, { status: 200 }));
+		const result = await downloadBlob('ws://relay/ws', 'gid', 'key', MAX_BLOB_BYTES, fetchImpl, 50);
+		expect(result.ok).toBe(true);
+		expect(Array.from(result.body!)).toEqual([1, 2, 3]);
+	});
+
+	it('still reports a network error (not a timeout) when fetch rejects', async () => {
+		const fetchImpl = mockFetch(async () => {
+			throw new Error('ECONNREFUSED');
+		});
+		const result = await downloadBlob('ws://relay/ws', 'gid', 'key', MAX_BLOB_BYTES, fetchImpl, 50);
+		expect(result.ok).toBe(false);
+		expect(result.error).toMatch(/failed/);
+		expect(result.error).not.toMatch(/timed out/);
+	});
+
+	it('times out when the body stalls after the headers arrive', async () => {
+		const fetchImpl = mockFetch(async () => {
+			const res = new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+			res.arrayBuffer = () => new Promise<ArrayBuffer>(() => {});
+			return res;
+		});
+		const result = await downloadBlob('ws://relay/ws', 'gid', 'key', MAX_BLOB_BYTES, fetchImpl, 20);
+		expect(result.ok).toBe(false);
+		expect(result.error).toMatch(/timed out/);
+	});
+
+	it('keeps the timeout result even when a late response arrives after it', async () => {
+		const fetchImpl = mockFetch(
+			() =>
+				new Promise<Response>((resolve) => {
+					setTimeout(() => resolve(new Response(new Uint8Array([1]), { status: 200 })), 200);
+				}),
+		);
+		const result = await downloadBlob('ws://relay/ws', 'gid', 'key', MAX_BLOB_BYTES, fetchImpl, 20);
+		expect(result.ok).toBe(false);
+		expect(result.error).toMatch(/timed out/);
+	});
 });
