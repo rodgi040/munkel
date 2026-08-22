@@ -38,6 +38,17 @@ describe('payload encoding', () => {
     expect(exactPayload.text).toBe(exactText);
   });
 
+  it('clamps chat text by grapheme cluster, not UTF-16 code unit (#51)', () => {
+    const under = '😀'.repeat(1500);
+    expect(encodeChat(under).text).toBe('😀'.repeat(1500));
+
+    const over = '😀'.repeat(3000);
+    expect(encodeChat(over).text).toBe('😀'.repeat(MAX_CHAT_CHARS));
+
+    const atCapWithTrailingEmoji = 'x'.repeat(2047) + '😀';
+    expect(encodeChat(atCapWithTrailingEmoji).text).toBe(atCapWithTrailingEmoji);
+  });
+
   it('encodes a profile payload without avatar', () => {
     const payload = encodeProfile('Alex');
     expect(payload).toEqual({ kind: 'profile', displayName: 'Alex' });

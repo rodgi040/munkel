@@ -1,3 +1,4 @@
+import { clampMessageText } from './message-limits.js';
 import { BLOB_KEY_REGEX, MAX_CHAT_CHARS, MAX_PAYLOAD_CHARS } from './wire-constants.js';
 import { bytesToBase64 } from './base64.js';
 export { BLOB_KEY_REGEX, MAX_CHAT_CHARS, MAX_PAYLOAD_CHARS };
@@ -69,13 +70,12 @@ export class PayloadTooLargeError extends PayloadError {}
 
 /**
  * Build a chat payload. `sentAt` defaults to the current time as ISO-8601.
- * Text is clamped to {@link MAX_CHAT_CHARS} to stay consistent with macOS.
+ * Text is clamped to {@link MAX_CHAT_CHARS} (grapheme clusters, not UTF-16
+ * code units - see `clampMessageText` in `./message-limits.js`) to stay
+ * consistent with macOS.
  */
 export function encodeChat(text: string, sentAt: Date = new Date()): ChatPayload {
-  if (text.length > MAX_CHAT_CHARS) {
-    text = text.slice(0, MAX_CHAT_CHARS);
-  }
-  return { kind: 'chat', text, sentAt: sentAt.toISOString() };
+  return { kind: 'chat', text: clampMessageText(text), sentAt: sentAt.toISOString() };
 }
 
 export interface EncodeProfileOptions {

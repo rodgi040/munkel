@@ -26,6 +26,16 @@
  * bypassing the UI (e.g. a future CLI-driven send over the control
  * server) — silently truncating there instead would change that existing,
  * tested behavior from a visible error into silent data loss.
+ *
+ * `./wire-constants.ts` re-exports this same constant as `MAX_CHAT_CHARS`,
+ * and `./payload.ts`'s `encodeChat` clamps outgoing chat text with
+ * `clampMessageText` below — not a raw `.slice()`. Both existed historically
+ * as separate constants, `MAX_CHAT_CHARS` counting UTF-16 code units via
+ * `String.prototype.slice`; that let a long-enough emoji/ZWJ message pass
+ * the UI's grapheme-based check and then get silently mis-truncated (and
+ * potentially left with a lone surrogate) on the wire (#51). `MAX_CHAT_CHARS`
+ * is now a plain alias of `MAX_MESSAGE_CHARS` — same cap, same unit — so the
+ * two names can no longer drift apart.
  */
 export const MAX_MESSAGE_CHARS = 2048;
 
