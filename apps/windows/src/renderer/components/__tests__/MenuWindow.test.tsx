@@ -2,8 +2,9 @@ import { describe, expect, it, beforeEach, afterEach, spyOn } from 'bun:test';
 import React from 'react';
 import { create, act } from 'react-test-renderer';
 import { AppProvider } from '../../store/app-store';
-import MenuWindow from '../MenuWindow';
+import MenuWindow, { CODE_COPY_FEEDBACK_MS } from '../MenuWindow';
 import type { StateUpdate, UpdateState } from '../../../shared/types';
+import { FakeTimers } from '../../../test-support/fake-timers';
 
 function createMockElectronApi(initialState: StateUpdate) {
 	let stateUpdateCb: ((update: StateUpdate) => void) | null = null;
@@ -1735,13 +1736,7 @@ describe('MenuWindow recipient avatar chips (P2.4)', () => {
 describe('MenuWindow copy circle code button', () => {
 	let electronApi: ReturnType<typeof createMockElectronApi>;
 	let clipboardCalls: string[];
-	// Unmounted in afterEach below: handleCopyCode arms a real 1500ms
-	// setTimeout (CODE_COPY_FEEDBACK_MS) on every successful copy. Most tests
-	// in this block never wait it out, so without an explicit unmount here
-	// the timer fires later against a still-mounted-but-out-of-scope
-	// CircleSection, outside any act() boundary — the exact "not wrapped in
-	// act(...)" warning this describe block used to produce. Unmounting runs
-	// CircleSection's cleanup effect, which clears the pending timer.
+	let timers: FakeTimers;
 	let root: ReturnType<typeof create> | undefined;
 
 	function twoCircleState(): StateUpdate {
@@ -1775,6 +1770,8 @@ describe('MenuWindow copy circle code button', () => {
 				},
 			},
 		};
+		timers = new FakeTimers();
+		timers.install();
 	});
 
 	afterEach(async () => {
@@ -1784,6 +1781,7 @@ describe('MenuWindow copy circle code button', () => {
 			});
 			root = undefined;
 		}
+		timers.restore();
 		delete (globalThis as unknown as { window?: unknown }).window;
 		delete (globalThis as unknown as { navigator?: unknown }).navigator;
 	});
@@ -1833,7 +1831,7 @@ describe('MenuWindow copy circle code button', () => {
 		expect(button().children).toEqual(['✓']);
 
 		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 1600));
+			timers.advance(CODE_COPY_FEEDBACK_MS);
 		});
 
 		expect(button().children).toEqual(['📋']);
