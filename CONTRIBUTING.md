@@ -36,6 +36,23 @@ bundle instead, run `cd apps/macos && ./make-bundle.sh release && open
 .build/Munkel.app`. See [`README.md`](README.md) for the full development
 workflow.
 
+### Local working files
+
+Some artifacts are useful while a piece of work is open but do not belong in
+history, so `.gitignore` keeps them out rather than leaving them to clutter
+`git status` indefinitely:
+
+- `scratchpad/` — drafts, measurement logs, throwaway scripts.
+- `Debugging/` — notes written alongside a live investigation. Once a finding
+  matters beyond the session it goes into the issue, the PR, or `docs/bugs/`.
+- `*-export-session_*.md` — verbatim transcripts of delegated sub-agent runs.
+  Worth keeping locally while the work is open; too large and too duplicative of
+  the documentation to carry in the repository.
+
+The rule behind all three: a file is ignored when its value expires with the
+task. Anything meant to outlive the task belongs in a durable artifact instead —
+an issue, a pull request, or a document under `docs/`.
+
 ## Pull requests
 
 - Keep changes scoped to one behavior or maintenance task.

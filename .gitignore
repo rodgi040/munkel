@@ -50,6 +50,13 @@ xcuserdata/
 
 # Scratchpad / local working drafts and backups
 /scratchpad/
+# Local debugging notes kept alongside a live investigation, not part of the record.
+/Debugging/
+# Verbatim sub-agent session transcripts. Useful while the work is open, far too
+# large and too duplicative of the docs to belong in history.
+/kimi-export-session_*.md
+/codex-export-session_*.md
+/cursor-export-session_*.md
 
 # graphify build artifacts (keep only clean deliverables)
 graphify-out/*
