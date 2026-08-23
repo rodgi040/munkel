@@ -169,9 +169,9 @@ export const imageCodec = {
 	 */
 	async prepareFull(source: Uint8Array): Promise<PreparedImage | null> {
 		if (!isSourceSafe(source)) return null;
-		await ensureAvifReady();
 		const bitmap = await decodeToBitmap(source);
 		if (!bitmap) return null;
+		await ensureAvifReady();
 		for (const pixels of FULL_PIXELS_STEPS(MAX_FULL_PIXELS)) {
 			const imageData = await drawInto(bitmap, pixels);
 			if (!imageData) continue;
@@ -197,9 +197,9 @@ export const imageCodec = {
 	 */
 	async makeThumbnail(source: Uint8Array, budgetBytes: number): Promise<PreparedThumb | null> {
 		if (!isSourceSafe(source)) return null;
-		await ensureAvifReady();
 		const bitmap = await decodeToBitmap(source);
 		if (!bitmap) return null;
+		await ensureAvifReady();
 		for (const pixels of THUMB_PIXELS_STEPS(MAX_THUMB_PIXELS)) {
 			const imageData = await drawInto(bitmap, pixels);
 			if (!imageData) continue;

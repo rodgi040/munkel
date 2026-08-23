@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events';
 import { RelayClient } from '../relay-client';
 import type { ServerMessage } from '../../core';
 import type WebSocket from 'ws';
+import { FakeTimers } from '../../test-support/fake-timers';
 
 class MockSocket extends EventEmitter {
 	static CONNECTING = 0;
@@ -49,33 +50,19 @@ class MockSocket extends EventEmitter {
 	}
 }
 
-function waitFor(condition: () => boolean, timeout = 1000): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const start = Date.now();
-		const check = () => {
-			if (condition()) {
-				resolve();
-				return;
-			}
-			if (Date.now() - start > timeout) {
-				reject(new Error('Timeout waiting for condition'));
-				return;
-			}
-			setTimeout(check, 10);
-		};
-		check();
-	});
-}
-
 describe('RelayClient', () => {
 	let sockets: MockSocket[] = [];
 	let client: RelayClient | null = null;
+	let timers: FakeTimers;
 
 	beforeEach(() => {
 		sockets = [];
+		timers = new FakeTimers();
+		timers.install();
 	});
 
 	afterEach(() => {
+		timers.restore();
 		client?.disconnect();
 		client = null;
 		for (const socket of sockets) {
@@ -98,7 +85,7 @@ describe('RelayClient', () => {
 		});
 		client.connect();
 
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		expect(sockets[0].url).toBe('wss://relay.example.com/ws?group=abc123&member=member-1');
 	});
 
@@ -112,11 +99,10 @@ describe('RelayClient', () => {
 		client.on('frame', (frame: ServerMessage) => frames.push(frame));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		sockets[0].receive({ type: 'pong' });
 
-		await waitFor(() => frames.length === 1);
 		expect(frames[0]).toEqual({ type: 'pong' });
 	});
 
@@ -127,7 +113,7 @@ describe('RelayClient', () => {
 		});
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 
 		expect(client.send({ type: 'ping' })).toBe(false);
 
@@ -146,12 +132,13 @@ describe('RelayClient', () => {
 		client.on('disconnected', () => disconnectedEvents.push(true));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		sockets[0].close();
 
-		await waitFor(() => disconnectedEvents.length === 1);
-		await waitFor(() => sockets.length === 2, 1500);
+		expect(disconnectedEvents).toHaveLength(1);
+		timers.advance(1000);
+		expect(sockets).toHaveLength(2);
 	});
 
 	test('reconnects after a socket error that is not followed by close (H-C)', async () => {
@@ -166,16 +153,17 @@ describe('RelayClient', () => {
 		client.on('disconnected', () => disconnectedEvents.push(true));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 
 		// Emit ONLY 'error' (no subsequent 'close'). The old code would stall
 		// here with a dead socket and never retry.
 		sockets[0].emit('error', new Error('ECONNRESET'));
 
-		await waitFor(() => errors.length === 1);
-		await waitFor(() => disconnectedEvents.length === 1);
-		await waitFor(() => sockets.length === 2, 1500);
+		expect(errors).toHaveLength(1);
+		expect(disconnectedEvents).toHaveLength(1);
+		timers.advance(1000);
+		expect(sockets).toHaveLength(2);
 	});
 
 	test('a following close after an error does not double-schedule a reconnect', async () => {
@@ -190,14 +178,15 @@ describe('RelayClient', () => {
 		client.on('disconnected', () => disconnectedEvents.push(true));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 
 		// Both events fire for the same socket; teardown must run once.
 		sockets[0].emit('error', new Error('boom'));
 		sockets[0].close();
 
-		await waitFor(() => sockets.length === 2, 1500);
+		timers.advance(1000);
+		expect(sockets).toHaveLength(2);
 		// Exactly one reconnect socket, one disconnect event — no double retry.
 		expect(sockets.length).toBe(2);
 		expect(disconnectedEvents.length).toBe(1);
@@ -210,11 +199,11 @@ describe('RelayClient', () => {
 		});
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		sockets[0].open();
 		client.disconnect();
 
-		await new Promise((resolve) => setTimeout(resolve, 1100));
+		timers.advance(60_000);
 		expect(sockets.length).toBe(1);
 	});
 
@@ -228,14 +217,14 @@ describe('RelayClient', () => {
 		client.on('disconnected', () => disconnectedEvents.push(true));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		client.disconnect();
 
 		// The socket later reports open and then close — both must be ignored.
 		sockets[0].open();
 		sockets[0].close();
 
-		await new Promise((resolve) => setTimeout(resolve, 1100));
+		timers.advance(60_000);
 		expect(disconnectedEvents.length).toBe(0);
 		expect(sockets.length).toBe(1);
 	});
@@ -252,12 +241,12 @@ describe('RelayClient', () => {
 		client.on('disconnected', () => disconnectedEvents.push(true));
 
 		client.connect();
-		await waitFor(() => sockets.length === 1);
+		expect(sockets).toHaveLength(1);
 		client.disconnect();
 
 		sockets[0].emit('error', new Error('after disconnect'));
 
-		await new Promise((resolve) => setTimeout(resolve, 1100));
+		timers.advance(60_000);
 		expect(errors.length).toBe(1); // error event is still forwarded
 		expect(disconnectedEvents.length).toBe(0);
 		expect(sockets.length).toBe(1);
