@@ -53,13 +53,12 @@ function collectFrames(socket: WebSocket): Collector<unknown> {
 describe('GroupSession', () => {
 	let server: WebSocketServer | null = null;
 	let serverSocket: WebSocket | null = null;
-	let connected: Promise<WebSocket> = Promise.reject(new Error('no server started'));
+	let connected: Promise<WebSocket> = new Promise(() => {});
 	const memberId = 'windows-member';
 
 	beforeEach(() => {
 		serverSocket = null;
-		connected = Promise.reject(new Error('no server started'));
-		connected.catch(() => {});
+		connected = new Promise(() => {});
 	});
 
 	afterEach(() => {
