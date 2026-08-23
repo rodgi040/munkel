@@ -5,11 +5,11 @@
 
 ## current_state
 
-- **Branch:** `platform/windows/v2-clean`, Tip `16ede21` (Merge von `origin/v2-clean` nach dem #67-Fix). Enthält `918e822` (PR #72) und `1b8c842` (Signing-Doku der Parallel-Session).
-- **`origin/v2-clean` steht auf `918e822`** — der lokale Tip `16ede21` und der Doku-Commit `1b8c842` sind **noch nicht gepusht**.
-- **Uncommitted:** `HANDOFF.md` + `STATE.md` (dieser Eintrag). Bewusst untracked: `Debugging/`, `kimi-export-session_-20260722-145402.md`.
+- **Branch:** `platform/windows/v2-clean`, Tip `9976f8e`. Kein offener Feature-Branch — der Sub-Branch zu #67 ist lokal und remote gelöscht.
+- **`origin/v2-clean` steht auf `918e822`** — lokal **4 Commits voraus**: `16ede21` (Merge), `d1896d5` + `9976f8e` (Doku) und `1b8c842` (Signing-Doku der Parallel-Session). **Noch nicht gepusht**, bewusst: der Push würde `1b8c842` mitveröffentlichen, das nicht von mir stammt.
+- **Uncommitted:** nur `HANDOFF.md` (dieser Eintrag). Bewusst untracked: `Debugging/`, `kimi-export-session_-20260722-145402.md`.
 - **Teststand:** `apps/windows` **682 pass / 0 fail** (~8 s idle), Typecheck grün, CI auf PR #72 dreifach grün.
-- **Offene Issues: 9.** #67 geschlossen, **#71 neu** (Folge-Issue).
+- **Offene Issues: 11.** #67 geschlossen; **#71 und #73 in dieser Session neu angelegt**.
 
 ## completed (diese Session)
 
@@ -30,17 +30,60 @@
 
 **Beinahe-Fehler, der es wert ist, gemerkt zu werden:** eine Zwischenfassung meldete `682 pass / 0 fail`, führte aber nur **8 von 29** Tests einer Datei aus — ein `Promise.reject`-Platzhalter brach die Datei ab, und bun zählte die übersprungenen Tests nicht als Fehler. Aufgefallen **nur** durch Vergleich der Testzahl gegen die Baseline, nicht durch das grüne Summary. Behoben in `a1d3ca3`. Lehre: bei Testharness-Umbauten immer die *Anzahl* gegen die Baseline prüfen, nie nur „0 fail" lesen.
 
+**Zwei neue Issues.**
+
+- **#71** — 26 verbliebene Wanduhr-Schlafe in `hover-copy-shortcut.test.ts` (12), `NotchWidget.test.tsx` (10), `Avatar.test.tsx` (4). Keiner ist in einem Lastlauf aufgefallen; Härtung, kein Defekt. `MenuWindow.test.tsx` dient als gearbeitetes Beispiel.
+- **#73** — auf deine Fehlermeldung hin untersucht: `Deploy Landing Preview` scheitert bei **jedem** Push auf `v2-clean` und war im Fork **nie** grün (**12 von 12 rot seit 22.07.**). Ursache: keine Repo-Secrets gesetzt (`gh secret list` leer), `wrangler versions upload` bricht ab. Ausgelöst wird er über den **kumulativen** Diff von Draft-PR #45 (`v2-clean → main`), der dauerhaft `package.json`/`bun.lock`/`turbo.json` berührt — deshalb feuert er auch bei reinen Test-Commits. Der Guard `head.repo.full_name == github.repository` greift nicht, weil #45 ein Same-Repo-PR ist. **Kein Regressionssignal**, verwandt mit #62.
+
+## remaining (in Reihenfolge)
+
+1. **#64** — `ImagePreviewOverlay` importiert, aber nie gerendert. Siehe `next_action`.
+2. **#54** — Speicher-Guard. **Vorher `.planning/p0-11` lesen**: die Parallelisierung war Absicht, nur die Read-Nebenläufigkeit beschränken.
+3. **#56** — Update-Wedge. **Vorher `.planning/p0-12` lesen**; den pinnenden Test umschreiben, nicht reparieren. Berührt `update-service.test.ts`.
+4. **#53** — kleiner Doku-Fix, zusammen mit der Korrektur von `.planning/p0-02`.
+5. **#61** — Konfigurationsschalter + `PRIVACY.md`; braucht echten Install/Uninstall/**Update**-Zyklus.
+6. **#62** — Workflow-Umbau, gegen echten Tag-Push verifizieren.
+7. **#70** — Doku-Fix `SECURITY.md`/`README.md`, jederzeit einschiebbar.
+8. **#71**, **#73** — Härtung bzw. CI-Hygiene.
+9. **#60** zurückgestellt (Team-Entscheidung), **#69** blockiert auf zweitem Windows-Konto.
+
+## decisions
+
+Diese Session, wortgleich wie gewählt:
+
+- **„Direkt hier umsetzen (empfohlen)"** — statt der Kette Grok → Sonnet → Kimi. Begründung: die zwei echten Race-Anker hingen an Diagnose-Details, die vollständig im Kontext lagen; ein mechanischer Rewriter hätte den Test grün gemacht statt den Anker korrigiert. Kimi blieb als read-only Verifikation.
+- **„Ja, await-Reihenfolge korrigieren (empfohlen)"** — `image-codec.ts` wird angefasst; `ensureAvifReady()` wandert hinter den bitmap-Guard. Im Renderer verhaltensgleich, keine Timing-Konstante geändert.
+- **„Frist anheben (empfohlen)"** — Runner-Frist 5 s → 30 s. Begründung: die 5000 ms sind selbst die Wanduhr-Frist um echtes I/O, die das Issue ausschließt, nur in der Runner-Vorgabe statt im Test.
+- **„Nur den erfassten MenuWindow-Fall (empfohlen)"** — ein Schlaf umgestellt, die übrigen 26 als #71. **Nachträgliche Korrektur:** die Begründung trug nicht — der in B3 erfasste `MenuWindow`-Fehlschlag ist ein *anderer* Test ohne eigenen Timer. Die Umstellung ist Konsistenzarbeit, kein Fix für jenen Fehlschlag. Steht so auch im PR und im Close-Kommentar.
+- **„Nein, nur als Issue erfassen"** — #73 wird nicht sofort gefixt, nur dokumentiert.
+
+Weiter gültig aus früheren Sessions:
+
+- **Auto-Close greift nicht** — GitHub schließt `Closes #N` nur beim Merge in den Default-Branch; wir mergen nach `v2-clean`. Jeder Windows-PR braucht ein manuelles Close.
+- **Red/Green vor jedem Merge**, und **vor dem Experiment committen**.
+- **Merge-Marker ohne `v`-Präfix** taggen (`windows/fix/…`), sonst feuert `release.yml`. Wird durch #62 gegenstandslos.
+- **Der graphify-Graph ist veraltet und irreführend** — direkt am Code lesen. In dieser Session erneut nicht benutzt.
+
 ## blockers
 
-- **Nicht gepusht:** lokaler `v2-clean` (`16ede21`) ist `origin` zwei Commits voraus, darunter `1b8c842` der Parallel-Session. Push ist Nutzerentscheidung, weil er fremde, möglicherweise noch in Arbeit befindliche Doku veröffentlicht.
-- **Zweite Agent-Session arbeitet in derselben Arbeitskopie.** Sie hat während dieser Session einen Commit angelegt und amendiert (`ac30abc` → `1b8c842`) und zwischenzeitlich ausgecheckt, was einen Messlauf verfälscht hat (4 Fehlschläge unter Fremdlast, nicht reproduzierbar). Bei Messungen darauf achten.
-- Sonst keine. **#69** bleibt auf einem zweiten Windows-Konto blockiert.
+- **Nicht gepusht:** lokaler `v2-clean` (`9976f8e`) ist `origin` **4 Commits voraus**, darunter `1b8c842` der Parallel-Session. Der Push ist Nutzerentscheidung, weil er fremde, möglicherweise noch in Arbeit befindliche Doku mitveröffentlicht. **Erste Frage der nächsten Session an den User.**
+- **Zweite Agent-Session arbeitet in derselben Arbeitskopie.** Sie hat während dieser Session einen Commit angelegt und amendiert (`ac30abc` → `1b8c842`) und zwischenzeitlich ausgecheckt. Das hat einen Messlauf verfälscht — ein „Leerlauf"-Lauf brauchte 129 s statt 10 s und meldete 4 Fehlschläge, die auf ruhiger Maschine nicht reproduzierbar waren. **Vor jeder Messung CPU-Last prüfen**, sonst misst man Fremdlast.
+- Sonst keine. **#69** bleibt auf einem zweiten Windows-Konto blockiert; **#60** ist zurückgestellt, nicht blockiert.
 
 ## next_action
 
-**#64 umsetzen** — `ImagePreviewOverlay` ist importiert, aber nie gerendert. Höchster Nutzerwert der Restlichen: Hover zieht heute das Fenster auf Arbeitsflächengröße auf, klaut den Fokus und zeigt nichts. Verursacher ist als Merge `3ed68fa` nachgewiesen, das JSX aus `fa37329` geborgen. **Fallstrick:** ein wörtlicher Restore wäre falsch — `previewImage` war damals ein abgeleiteter Wert aus `previewImageID`, heute ist es der `useState` der Klick-Lightbox. Gleicher Name, andere Bedeutung.
+**#64 umsetzen** — `ImagePreviewOverlay` ist importiert, aber nie gerendert. Höchster Nutzerwert der Restlichen: Hover zieht heute das Fenster auf Arbeitsflächengröße auf, klaut den Fokus und zeigt nichts. Verursacher ist als Merge `3ed68fa` nachgewiesen, das JSX aus `fa37329` geborgen. **Fallstrick:** ein wörtlicher Restore wäre falsch — `previewImage` war damals ein abgeleiteter Wert aus `previewImageID`, heute ist es der `useState` der Klick-Lightbox. Gleicher Name, andere Bedeutung; ein Verbatim-Restore erzeugte die Kollisionsklasse aus #52/#59 ein drittes Mal.
 
-Danach #54 (vorher `.planning/p0-11` lesen), #56 (vorher `p0-12`), #53, #61, #62, #70, #71.
+Vorgehen wie bei #67: eigener Sub-Branch off `v2-clean`, Red/Green vor dem Merge, PR nach `v2-clean` (nie `main`), Merge-Commit `--no-ff`, Tag ohne `v`-Präfix, Issue von Hand schließen.
+
+## suggested_skills
+
+- `/fp-resume` zum Wiederaufsetzen
+- `/fp-debug` für #64 — es ist ein echter Defekt mit Reproduktionsbedarf
+- `delegate` für Kimi-Verifikation — immer über `~/.claude/agents/delegate.sh --to kimi --readonly --model ds`, **nur im Foreground** (Memory `kimi-delegate-wrapper-must-run-foreground`)
+- `gh issue` / `gh pr` gegen `--repo rodgi040/munkel`; PRs nach `platform/windows/v2-clean`
+- **Nicht** `graphify query` — der Graph ist veraltet und zeigt auf seit PR #33 gelöschte Pfade
+- Last-Harness für Testmessungen liegt unter `…/scratchpad/flaky67/loadrun.sh` (`bash loadrun.sh <label> <burner> <sekunden>`); sie ruft `bun run test` auf, damit die Frist aus dem Paket-Skript greift
 
 ---
 
