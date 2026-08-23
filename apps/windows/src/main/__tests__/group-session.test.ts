@@ -54,6 +54,7 @@ describe('GroupSession', () => {
 	let server: WebSocketServer | null = null;
 	let serverSocket: WebSocket | null = null;
 	let connected: Promise<WebSocket> = new Promise(() => {});
+	const sessions: GroupSession[] = [];
 	const memberId = 'windows-member';
 
 	beforeEach(() => {
@@ -62,9 +63,21 @@ describe('GroupSession', () => {
 	});
 
 	afterEach(() => {
+		for (const session of sessions) {
+			session.disconnect();
+		}
+		sessions.length = 0;
 		server?.close();
 		server = null;
 	});
+
+	async function createSession(
+		...args: Parameters<typeof GroupSession.create>
+	): Promise<GroupSession> {
+		const session = await GroupSession.create(...args);
+		sessions.push(session);
+		return session;
+	}
 
 	function startServer(): WebSocketServer {
 		const wss = new WebSocketServer({ port: 0 });
@@ -91,7 +104,7 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			'blue-table-42',
 			relayUrl,
 			memberId,
@@ -123,7 +136,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -159,7 +172,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -206,7 +219,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -246,7 +259,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -282,7 +295,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -329,7 +342,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const states = new Collector<CircleState>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -364,7 +377,7 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -405,7 +418,7 @@ describe('GroupSession', () => {
 
 		const chats = new Collector<{ sender: string; text: string; isDirect: boolean; sentAt: string }>();
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -452,7 +465,7 @@ describe('GroupSession', () => {
 
 		const chats = new Collector<{ sender: string; text: string; isDirect: boolean; sentAt: string }>();
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -498,7 +511,7 @@ describe('GroupSession', () => {
 		const code = 'green-apple-99';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -545,7 +558,7 @@ describe('GroupSession', () => {
 		const code = 'echo-broadcast-on';
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -582,7 +595,7 @@ describe('GroupSession', () => {
 		const code = 'echo-broadcast-off';
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -611,7 +624,7 @@ describe('GroupSession', () => {
 		const code = 'echo-broadcast-omitted';
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -639,7 +652,7 @@ describe('GroupSession', () => {
 		const code = 'echo-private-not-echoed';
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -668,7 +681,7 @@ describe('GroupSession', () => {
 		const code = 'echo-failed-send';
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -696,7 +709,7 @@ describe('GroupSession', () => {
 		const code = 'paper-river';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -742,7 +755,7 @@ describe('GroupSession', () => {
 		const code = 'emoji-river';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -788,7 +801,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const notches = new Collector<import('../../shared/types').NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -843,7 +856,7 @@ describe('GroupSession', () => {
 		await writeFile(path1, 'not-a-valid-image-1');
 		await writeFile(path2, 'not-a-valid-image-2');
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -874,7 +887,7 @@ describe('GroupSession', () => {
 		const { messageKey } = await deriveGroupKeys(code);
 
 		const notches = new Collector<NotchMessage>();
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
