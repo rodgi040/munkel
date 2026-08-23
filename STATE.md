@@ -95,6 +95,7 @@ Backup-Refs `backup/pre-reconcile-*` auf `78feefd`.
 9. **#60** — **zurückgestellt, nicht blockiert.** Team hat entschieden: vorerst keine eigene Signierung. Bleibt als Tracker offen.
 10. **#69** — blockiert auf zweitem Windows-Konto. Einziger echter Blocker.
 11. **#71** — 26 verbliebene Wanduhr-Schlafe in `hover-copy-shortcut`, `NotchWidget`, `Avatar`. Härtung, kein Defekt; `MenuWindow.test.tsx` dient als gearbeitetes Beispiel.
-12. **OQ5** (CLI-Distribution) mit User.
+12. **#73** — `Deploy Landing Preview` scheitert bei **jedem** Push auf `v2-clean` und war im Fork **nie** grün (12/12 seit 22.07.). Keine Repo-Secrets gesetzt; ausgelöst über den kumulativen Diff von Draft-PR #45. Verwandt mit #62.
+13. **OQ5** (CLI-Distribution) mit User.
 
 Offener Punkt: die Querverweise auf `.planning/p0-02/11/12` stehen bisher nur in `HANDOFF.md`, **nicht in den Issues #53/#54/#56**.
