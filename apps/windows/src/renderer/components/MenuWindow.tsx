@@ -12,7 +12,7 @@ import type { CircleState, GitHubLoginState, IdentityState, Member, PresenceStat
 // copy circle code button"), matching the copy-button pattern already used
 // for the notch's message copy button (`COPY_FEEDBACK_MS` in
 // `useNotchLifecycle.ts`).
-const CODE_COPY_FEEDBACK_MS = 1_500;
+export const CODE_COPY_FEEDBACK_MS = 1_500;
 
 // Mirrors `MAX_IMAGES_PER_MESSAGE` in `core/image-codec.ts` (see
 // PaletteWindow.tsx for why it's a local copy, not an import).

@@ -2,6 +2,12 @@
 
 ## Now
 
+**2026-08-23 (Nachmittag) — Triage-Runde vollständig abgeschlossen, nächster Schritt ist Umsetzung.** Alle acht offenen Issues triagiert, jeweils mit Verifikation am Code und einem Brief als Kommentar: **sieben `ready-for-agent`** (#53, #54, #56, #61, #62, #64, #67 — davon #61/#62 `enhancement`), **zwei `ready-for-human`** (#60, #69). Kein Code angefasst, Tip bleibt `c10ed37`. **Sieben Befunde haben die jeweilige Aufgabe gegenüber dem Issue-Text verändert** — Details in `HANDOFF.md`, hier die folgenreichsten: #54s im Issue beschriebene Reproduktion ist **bereits geschlossen** (CLI prüft `stat()`), die echte Lücke ist der IPC-Pfad plus eine Schwellendivergenz 50 gegen 32 MiB; #56 wird von einem **grünen Test zementiert**, der den Wedge als Soll-Verhalten festschreibt und umgeschrieben werden muss; #61s im Issue vorgeschlagener NSIS-Hook hätte bei **jedem Auto-Update** die Kanäle gelöscht (die eingebaute Option ist dagegen abgesichert); #64s Verursacher ist als Merge `3ed68fa` nachgewiesen und das JSX aus `fa37329` geborgen, aber ein Verbatim-Restore wäre falsch, weil `previewImage` heute die Klick-Lightbox meint statt des abgeleiteten Hover-Werts; #67 hängt nicht an Debounces, sondern an einer **Wanduhr-Frist von 2000 ms um einen echten WebSocket-Handshake** (gleiche Helfer-Kopie latent auch in `relay-client.test.ts`). **#60 durch Recherche neu gefasst:** die `.pfx` im Secret gibt es seit Juni 2023 nicht mehr (auch nicht für OV), maximale Zertifikatsgültigkeit seit März 2026 458 Tage, und Azure Artifact Signing ist für Einzelpersonen auf USA/Kanada beschränkt, für Organisationen auf USA/Kanada/EU/UK — die Rechtsform entscheidet den Anbieter. **Befund mit Folgen:** `.planning/p0-02`, `p0-11` und `p0-12` sind die **Quelle** von #53, #54 und #56; die Parallelisierung in #54 und das Ignorieren von `cancelInstall` in #56 waren bewusste Entscheidungen und dürfen nicht versehentlich zurückgedreht werden.
+
+**2026-08-23 (Vormittag) — Triage-Runde, pausiert mitten in #53.** `/triage` (mattpocock-skills) über alle offenen Issues in `rodgi040/munkel`. Kein Code geändert. **Offene Issues 12 → 8.** Vier faktisch erledigte geschlossen (#51/PR #66, #52/PR #63, #55/PR #68, #57/PR #65), jeweils mit Merge-Commit und Dateipfaden im Close-Kommentar. **Befund: Auto-Close greift hier grundsätzlich nicht** — GitHub schließt `Closes #N` nur beim Merge in den Default-Branch, wir mergen nach `v2-clean`; jeder künftige Windows-PR braucht ein manuelles Close. Die vier fehlenden State-Labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`) angelegt, damit ist das Triage-Mapping vollständig. **#53 verifiziert (CONFIRMED)**, Enumeration reproduziert (1640 Pipes sichtbar), aber **Befund: beide im Issue vorgeschlagenen Fixes lösen das dort genannte Threat Model nicht** — DACL auf User-SID *erlaubt* genau diesen User, Secret in `%LOCALAPPDATA%` liest genau dieser User. Entscheidung offen, Details in `HANDOFF.md` → `in_progress_exchange`. **Nebenbefund: der graphify-Graph ist veraltet** und zeigt auf `apps/windows/src/core/control.ts` / `apps/cli/src/control.ts`, die seit PR #33 nicht mehr existieren.
+
+**2026-08-22 — beide Release-Blocker geschlossen, Issue-Abarbeitung gestartet.** Merge-Runde (PR #48, #47; #46 als redundant geschlossen), dann Release-Review über fünf Cursor-Agents — von 5 gemeldeten CRITICAL/HIGH hielten 2 stand. **#58/PR #49** (`c69e8be`) Versions-Drift: `apps/windows/package.json` stand auf `0.0.1`, Auto-Update hätte ab Release 1 nie gegriffen; `scripts/pack-release.mjs` patcht aus `MUNKEL_VERSION` und stellt den Pin im `finally` zurück. **#59/PR #50** (`d6097bb`) Click-Through-Autorität: zwei Preview-Systeme steuerten dieselbe Fenster-Eigenschaft, System B gelöscht statt umverdrahtet. Danach #52, #57, #51, #55 abgearbeitet. Teststand: **682 pass / 0 fail** in `apps/windows`, 32 CLI, 32 shared-wire, Typecheck grün. Neu erfasst: #64, #67. Etabliert: Grok plant (Kontext inline), Sonnet setzt um, Kimi verifiziert; **Red/Green-Nachweis vor jedem Merge**, und **vor dem Experiment committen** (`git checkout -- <datei>` hat einmal uncommittete Executor-Arbeit gelöscht).
+
 **2026-08-18 — Origin-Drift-Follow-up lokal grün.** Branch `platform/windows/origin-drift-fix` off `v2-clean` (`1109002`): Typecheck `PersistedState.version: 1 | 2`, Payload-Tests an shared-wire, GroupSession-Echo via Disconnect, NotchWidget Hover/History/Pulse wieder verdrahtet, Hover-Reopen → `ui === 'open'`. Verifikation: **654 pass / 0 fail**, `tsc` grün. PR #47 bleibt separat (rebase nach Merge dieser Basis). Pause: Commit+Push, kein Merge.
 
 **2026-08-17 — Git-Divergenz-Reconciliation abgeschlossen.** Lokalen divergierten `v2-clean`
@@ -50,10 +56,17 @@ Davor: **Iteration 8 abgeschlossen — P3 KOMPLETT: pulse-Verdrahtung, P3.6 Hist
 - ✅ **Plan 14 / OQ4 Image Quick-Look (2026-07-17)** — Hover-Overlay, wide notch, blob-download, full-res copy; Matrix 38/1/0/1.
 - ✅ **Echo opt-in default (2026-07-18)** — `devEchoBroadcasts` default `false`, `state.json` v2-Migration; User-verifiziert.
 - ✅ **Origin-Drift-Follow-up (2026-08-18)** — Typecheck `version: 1 | 2`; stale Payload/Echo-Tests; NotchWidget-Wiring (ref/testid/hover-copy/collapsible/pulse); Hover-Reopen öffnet History. Teststand: **654 pass / 0 fail**.
+- ✅ **Release-Blocker #58 + #59 geschlossen (2026-08-22)** — Versions-Drift (`c69e8be`) und Click-Through-Autorität (`d6097bb`); Tags `windows/fix/release-version-from-tag` und `windows/fix/single-click-through-authority`.
+- ✅ **Issue-Runde #52 / #57 / #51 / #55 (2026-08-22)** — CSS-Kollision Klick-Lightbox (`4c38884`), verwaister `preview`-State (`bcfa94d`, −113 Zeilen), Grapheme-Clamp inkl. CLI (`527a0f0`), blob-download-Timeout mit Epoch-Fence (`eaea5e2`). Teststand **682 pass / 0 fail**.
+- ✅ **Triage-Infrastruktur + Aufräumrunde (2026-08-23)** — vier State-Labels angelegt, vier erledigte Issues manuell geschlossen, #53 verifiziert. Offene Issues 12 → 8.
+- ✅ **Triage-Runde abgeschlossen (2026-08-23)** — alle acht offenen Issues triagiert und mit Brief versehen, #69 als Messung aus #53 abgespalten. Sieben `ready-for-agent`, zwei `ready-for-human`. Sieben Issue-Texte durch Verifikation am Code korrigiert; `.planning/p0-02/11/12` als Quelle von #53/#54/#56 identifiziert.
 - ✅ (früher) Single-Instance/Self-Heal, Circle-Leave-Dialog, Logo-Assets, Auto-Update, Notch Peek/History — alles in `platform/windows/v2-clean` bzw. darunter gemerged.
 
 ## Last
 
+2026-08-23 — Triage-Runde komplett: alle 8 offenen Issues mit Brief versehen, #69 neu; 6 ready-for-agent, 2 ready-for-human.
+2026-08-23 — Triage: 4 State-Labels angelegt, #51/#52/#55/#57 geschlossen, #53 verifiziert (Entscheidung offen).
+2026-08-22 — Release-Blocker #58 (PR #49) + #59 (PR #50) geschlossen; #52/#57/#51/#55 über PR #63/#65/#66/#68 abgearbeitet.
 2026-08-22 — `origin-drift-fix` (PR #48) gemerged; `notch-history-and-preview-fix` (PR #47) auf die neue Basis gemerged.
 2026-08-18 — Origin-Drift auf `platform/windows/origin-drift-fix` geschlossen (654 pass / 0 fail).
 2026-08-17 — Git-Divergenz-Reconciliation abgeschlossen: 5 Code-Commits + 1 Docs-Commit auf
@@ -62,6 +75,17 @@ Backup-Refs `backup/pre-reconcile-*` auf `78feefd`.
 
 ## Next
 
-1. Restliche offene Branches sichten (`notch-lifecycle-harden`, `update-signature-fix`) und schliessen.
-2. **OQ5** (CLI-Distribution) mit User.
-3. **OQ5** (CLI-Distribution) mit User.
+Triage ist durch — ab hier wird umgesetzt. Reihenfolge bewusst **nicht** nach Severity:
+
+1. **#67 zuerst** — flaky Suite. Nicht wegen Severity (`minor`), sondern weil sie die Verifikation aller anderen Fixes untergräbt: „Red/Green vor jedem Merge" ist wertlos, solange grün „grün diesmal" heißt. Erster Schritt: Suite unter absichtlicher Last laufen lassen und Namen einfangen — Isolation funktioniert nachweislich nicht.
+2. **#64** — höchster Nutzerwert: Hover zieht heute das Fenster auf, klaut den Fokus, zeigt nichts. JSX geborgen, Fallstrick benannt.
+3. **#54** — Speicher-Guard. **Vorher `.planning/p0-11` lesen**: die Parallelisierung war Absicht, nur die Read-Nebenläufigkeit beschränken.
+4. **#56** — Update-Wedge. **Vorher `.planning/p0-12` lesen**; den pinnenden Test umschreiben, nicht reparieren.
+5. **#53** — kleiner Doku-Fix, zusammen mit der Korrektur von `.planning/p0-02`.
+6. **#61** — Konfigurationsschalter + PRIVACY.md; braucht echten Install/Uninstall/**Update**-Zyklus zur Verifikation.
+7. **#62** — Workflow-Umbau, gegen echten Tag-Push verifizieren.
+8. **#60** — blockiert auf Rechtsform-/Anbieter-Entscheidung (User). Einziger `release-blocker`.
+9. **#69** — blockiert auf zweitem Windows-Konto.
+10. **OQ5** (CLI-Distribution) mit User.
+
+Offener Punkt: die Querverweise auf `.planning/p0-02/11/12` stehen bisher nur in `HANDOFF.md`, **nicht in den Issues #53/#54/#56**.
