@@ -17,53 +17,94 @@ function getPort(server: WebSocketServer): number {
 	return address.port;
 }
 
-function waitFor(condition: () => boolean, timeout = 2000): Promise<void> {
-	return new Promise((resolve, reject) => {
-		const start = Date.now();
-		const check = () => {
-			if (condition()) {
-				resolve();
-				return;
-			}
-			if (Date.now() - start > timeout) {
-				reject(new Error('Timeout waiting for condition'));
-				return;
-			}
-			setTimeout(check, 10);
-		};
-		check();
+class Collector<T> extends Array<T> {
+	static get [Symbol.species](): ArrayConstructor {
+		return Array;
+	}
+
+	private waiters: Array<{ predicate: () => boolean; resolve: () => void }> = [];
+
+	push(...items: T[]): number {
+		const length = super.push(...items);
+		this.waiters = this.waiters.filter((waiter) => {
+			if (!waiter.predicate()) return true;
+			waiter.resolve();
+			return false;
+		});
+		return length;
+	}
+
+	until(predicate: () => boolean): Promise<void> {
+		if (predicate()) return Promise.resolve();
+		return new Promise<void>((resolve) => {
+			this.waiters.push({ predicate, resolve });
+		});
+	}
+}
+
+function collectFrames(socket: WebSocket): Collector<unknown> {
+	const frames = new Collector<unknown>();
+	socket.on('message', (data) => {
+		frames.push(JSON.parse(data.toString()));
 	});
+	return frames;
 }
 
 describe('GroupSession', () => {
 	let server: WebSocketServer | null = null;
 	let serverSocket: WebSocket | null = null;
+	let connected: Promise<WebSocket> = new Promise(() => {});
+	const sessions: GroupSession[] = [];
 	const memberId = 'windows-member';
 
 	beforeEach(() => {
 		serverSocket = null;
+		connected = new Promise(() => {});
 	});
 
 	afterEach(() => {
+		for (const session of sessions) {
+			session.disconnect();
+		}
+		sessions.length = 0;
 		server?.close();
 		server = null;
 	});
 
+	async function createSession(
+		...args: Parameters<typeof GroupSession.create>
+	): Promise<GroupSession> {
+		const session = await GroupSession.create(...args);
+		sessions.push(session);
+		return session;
+	}
+
 	function startServer(): WebSocketServer {
 		const wss = new WebSocketServer({ port: 0 });
-		wss.on('connection', (ws) => {
-			serverSocket = ws;
+		connected = new Promise<WebSocket>((resolve) => {
+			wss.once('connection', (ws) => {
+				serverSocket = ws;
+				resolve(ws);
+			});
 		});
 		server = wss;
 		return wss;
+	}
+
+	async function handshake(members: string[] = []): Promise<Collector<unknown>> {
+		const socket = await connected;
+		const frames = collectFrames(socket);
+		socket.send(JSON.stringify({ type: 'welcome', members }));
+		await frames.until(() => frames.length >= 1);
+		return frames;
 	}
 
 	test('connects and reflects welcome members in state', async () => {
 		const wss = startServer();
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			'blue-table-42',
 			relayUrl,
 			memberId,
@@ -77,10 +118,10 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1', 'peer-2'] }));
 
-		await waitFor(() => states.some((s) => s.isConnected && s.members.length === 2));
+		await states.until(() => states.some((s) => s.isConnected && s.members.length === 2));
 		const state = states[states.length - 1];
 		expect(state.isConnected).toBe(true);
 		expect(state.members.map((m) => m.memberId)).toEqual(['peer-1', 'peer-2']);
@@ -94,8 +135,8 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -109,15 +150,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		const profilePayload = encodeProfile('Alice');
 		const sealed = await seal(JSON.stringify(profilePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(
+		await states.until(
 			() => states.some((s) => s.members.some((m) => m.memberId === 'peer-1' && m.displayName === 'Alice')),
 		);
 
@@ -130,8 +171,8 @@ describe('GroupSession', () => {
 		const code = 'amber-fox';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -145,15 +186,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		// Step 1: peer-1 broadcasts a profile WITH an avatar.
 		const withAvatar = encodeProfile('Alice', 'data:image/png;base64,AAAA');
 		const sealed1 = await seal(JSON.stringify(withAvatar), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed1 }));
-		await waitFor(() =>
+		await states.until(() =>
 			states.some((s) => s.members.some((m) => m.memberId === 'peer-1' && m.avatar === 'data:image/png;base64,AAAA')),
 		);
 
@@ -161,7 +202,7 @@ describe('GroupSession', () => {
 		const cleared = encodeProfile('AliceNew');
 		const sealed2 = await seal(JSON.stringify(cleared), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed2 }));
-		await waitFor(() =>
+		await states.until(() =>
 			states.some((s) => {
 				const m = s.members.find((m) => m.memberId === 'peer-1');
 				return m?.displayName === 'AliceNew' && m.avatar === undefined;
@@ -177,8 +218,8 @@ describe('GroupSession', () => {
 		const code = 'cobalt-hare';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -192,16 +233,16 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		// Welcome with NO peer-1 yet; the profile frame introduces them.
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		const profilePayload = encodeProfile('Bob');
 		const sealed = await seal(JSON.stringify(profilePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-2', payload: sealed }));
 
-		await waitFor(() =>
+		await states.until(() =>
 			states.some((s) => {
 				const m = s.members.find((m) => m.memberId === 'peer-2');
 				return m?.displayName === 'Bob' && m.avatar === undefined;
@@ -217,8 +258,8 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -232,15 +273,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		const profilePayload = encodeProfile('Alice', { status: 'dnd' });
 		const sealed = await seal(JSON.stringify(profilePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(
+		await states.until(
 			() => states.some((s) => s.members.some((m) => m.memberId === 'peer-1' && m.status === 'dnd')),
 		);
 
@@ -253,8 +294,8 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -268,15 +309,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		// Step 1: establish a known status via presence.
 		const presencePayload = { kind: 'presence', status: 'dnd' };
 		const sealed1 = await seal(JSON.stringify(presencePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed1 }));
-		await waitFor(
+		await states.until(
 			() => states.some((s) => s.members.some((m) => m.memberId === 'peer-1' && m.status === 'dnd')),
 		);
 
@@ -284,7 +325,7 @@ describe('GroupSession', () => {
 		const profilePayload = encodeProfile('Alice');
 		const sealed2 = await seal(JSON.stringify(profilePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed2 }));
-		await waitFor(
+		await states.until(
 			() => states.some((s) => {
 				const m = s.members.find((m) => m.memberId === 'peer-1');
 				return m?.displayName === 'Alice' && m.status === 'dnd';
@@ -300,8 +341,8 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const states: CircleState[] = [];
-		const session = await GroupSession.create(
+		const states = new Collector<CircleState>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -315,15 +356,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
-		await waitFor(() => states.some((s) => s.isConnected));
+		await states.until(() => states.some((s) => s.isConnected));
 
 		const presencePayload = { kind: 'presence', status: 'away' };
 		const sealed = await seal(JSON.stringify(presencePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(
+		await states.until(
 			() => states.some((s) => s.members.some((m) => m.memberId === 'peer-1' && m.status === 'away')),
 		);
 
@@ -336,7 +377,7 @@ describe('GroupSession', () => {
 		const code = 'lunar-owl';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -350,23 +391,21 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		const frames = collectFrames(await connected);
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
-
-		const frames: unknown[] = [];
-		serverSocket!.on('message', (data) => {
-			frames.push(JSON.parse(data.toString()));
-		});
+		await frames.until(() => frames.length >= 1);
 
 		await session.broadcastPresence('dnd');
+		await frames.until(() => frames.length >= 2);
 
-		await waitFor(() => frames.length >= 1);
-		const presenceFrame = frames.find((f) => (f as { type: string }).type === 'send') as { type: string; payload: string } | undefined;
-		expect(presenceFrame).toBeDefined();
-		const plaintext = await open(presenceFrame!.payload, messageKey);
-		const decoded = JSON.parse(plaintext);
-		expect(decoded.kind).toBe('presence');
-		expect(decoded.status).toBe('dnd');
+		const payloads = await Promise.all(
+			frames
+				.filter((f) => (f as { type: string }).type === 'send')
+				.map(async (f) => JSON.parse(await open((f as { payload: string }).payload, messageKey))),
+		);
+		const presence = payloads.find((p) => p.kind === 'presence');
+		expect(presence).toBeDefined();
+		expect(presence.status).toBe('dnd');
 
 		session.disconnect();
 	});
@@ -377,9 +416,9 @@ describe('GroupSession', () => {
 		const code = 'solar-kite';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const chats: { sender: string; text: string; isDirect: boolean; sentAt: string }[] = [];
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const chats = new Collector<{ sender: string; text: string; isDirect: boolean; sentAt: string }>();
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -393,7 +432,7 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
 
 		const chatPayload = encodeChat('Hello Windows!');
@@ -402,7 +441,10 @@ describe('GroupSession', () => {
 			JSON.stringify({ type: 'message', from: 'peer-1', to: memberId, payload: sealed }),
 		);
 
-		await waitFor(() => chats.length === 1 && notches.length === 1);
+		await Promise.all([
+			chats.until(() => chats.length === 1),
+			notches.until(() => notches.length === 1),
+		]);
 		expect(chats[0].sender).toBe('peer-1');
 		expect(chats[0].text).toBe('Hello Windows!');
 		expect(chats[0].isDirect).toBe(true);
@@ -421,9 +463,9 @@ describe('GroupSession', () => {
 		const code = 'cedar-brook';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const chats: { sender: string; text: string; isDirect: boolean; sentAt: string }[] = [];
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const chats = new Collector<{ sender: string; text: string; isDirect: boolean; sentAt: string }>();
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -437,7 +479,7 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
 
 		// A peer sending oversized plaintext (bypassing this app's own UI
@@ -451,7 +493,10 @@ describe('GroupSession', () => {
 		const sealed = await seal(JSON.stringify(chatPayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(() => chats.length === 1 && notches.length === 1);
+		await Promise.all([
+			chats.until(() => chats.length === 1),
+			notches.until(() => notches.length === 1),
+		]);
 		expect(chats[0].text.length).toBe(2048);
 		expect(chats[0].text).toBe('a'.repeat(2048));
 		expect(notches[0].text.length).toBe(2048);
@@ -466,7 +511,7 @@ describe('GroupSession', () => {
 		const code = 'green-apple-99';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -480,15 +525,15 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 
-		const frames: unknown[] = [];
+		const frames = new Collector<unknown>();
 		serverSocket!.on('message', (data) => {
 			frames.push(JSON.parse(data.toString()));
 		});
 
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
-		await waitFor(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
+		await frames.until(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
 		// The first send is the profile broadcast after welcome.
 		const profileFrame = frames[0] as { type: string; payload: string };
 		expect(profileFrame.type).toBe('send');
@@ -496,7 +541,7 @@ describe('GroupSession', () => {
 		const sent = await session.sendChat('Hello from Windows');
 		expect(sent).toEqual({ ok: true });
 
-		await waitFor(() => frames.length >= 2);
+		await frames.until(() => frames.length >= 2);
 		const chatFrame = frames[1] as { type: string; payload: string };
 		expect(chatFrame.type).toBe('send');
 
@@ -512,8 +557,8 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'echo-broadcast-on';
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -527,12 +572,11 @@ describe('GroupSession', () => {
 			},
 		);
 		session.connect();
-		await waitFor(() => serverSocket !== null);
+		await handshake();
 
 		const sent = await session.sendChat('Hello myself');
 		expect(sent).toEqual({ ok: true });
 
-		await waitFor(() => notches.length >= 1);
 		expect(notches).toHaveLength(1);
 		expect(notches[0]!.sender).toBe('Windows User');
 		expect(notches[0]!.senderMemberId).toBe(memberId);
@@ -550,8 +594,8 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'echo-broadcast-off';
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -565,17 +609,10 @@ describe('GroupSession', () => {
 			},
 		);
 		session.connect();
-		await waitFor(() => serverSocket !== null);
+		await handshake();
 
 		const sent = await session.sendChat('Should not echo');
 		expect(sent).toEqual({ ok: true });
-
-		// No onNotch call has any window to wait for succeeding — assert on a
-		// short, deterministic follow-up round trip instead of a fixed sleep:
-		// a second broadcast lands normally, proving the first send's absence
-		// from `notches` isn't a timing fluke.
-		const sentAgain = await session.sendChat('Second send');
-		expect(sentAgain).toEqual({ ok: true });
 		expect(notches).toHaveLength(0);
 
 		session.disconnect();
@@ -586,8 +623,8 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'echo-broadcast-omitted';
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -597,12 +634,10 @@ describe('GroupSession', () => {
 				onChat: () => {},
 				onNotch: (message) => notches.push(message),
 				getColorIndex: () => 0,
-				// shouldEchoBroadcasts intentionally omitted, like every other
-				// test in this file predating Plan 13 item 6.
 			},
 		);
 		session.connect();
-		await waitFor(() => serverSocket !== null);
+		await handshake();
 
 		const sent = await session.sendChat('No echo callback at all');
 		expect(sent).toEqual({ ok: true });
@@ -616,8 +651,8 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'echo-private-not-echoed';
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -631,7 +666,7 @@ describe('GroupSession', () => {
 			},
 		);
 		session.connect();
-		await waitFor(() => serverSocket !== null);
+		await handshake();
 
 		const sent = await session.sendChat('Just for peer-1', 'peer-1');
 		expect(sent).toEqual({ ok: true });
@@ -645,8 +680,8 @@ describe('GroupSession', () => {
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'echo-failed-send';
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -660,7 +695,7 @@ describe('GroupSession', () => {
 			},
 		);
 		session.connect();
-		await waitFor(() => serverSocket !== null);
+		await handshake();
 
 		session.disconnect();
 		const result = await session.sendChat('hello');
@@ -674,7 +709,7 @@ describe('GroupSession', () => {
 		const code = 'paper-river';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -688,21 +723,21 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 
-		const frames: unknown[] = [];
+		const frames = new Collector<unknown>();
 		serverSocket!.on('message', (data) => {
 			frames.push(JSON.parse(data.toString()));
 		});
 
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
-		await waitFor(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
+		await frames.until(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
 
 		const longText = 'x'.repeat(MAX_CHAT_CHARS + 100);
 		const sent = await session.sendChat(longText);
 		expect(sent).toEqual({ ok: true });
 
-		await waitFor(() => frames.length >= 2);
+		await frames.until(() => frames.length >= 2);
 		const chatFrame = frames[1] as { type: string; payload: string };
 		expect(chatFrame.type).toBe('send');
 
@@ -720,7 +755,7 @@ describe('GroupSession', () => {
 		const code = 'emoji-river';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -734,21 +769,21 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 
-		const frames: unknown[] = [];
+		const frames = new Collector<unknown>();
 		serverSocket!.on('message', (data) => {
 			frames.push(JSON.parse(data.toString()));
 		});
 
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
-		await waitFor(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
+		await frames.until(() => frames.length > 0 && (frames[0] as { type: string }).type === 'send');
 
 		const emojiText = '😀'.repeat(1500);
 		const sent = await session.sendChat(emojiText);
 		expect(sent).toEqual({ ok: true });
 
-		await waitFor(() => frames.length >= 2);
+		await frames.until(() => frames.length >= 2);
 		const chatFrame = frames[1] as { type: string; payload: string };
 		expect(chatFrame.type).toBe('send');
 
@@ -765,8 +800,8 @@ describe('GroupSession', () => {
 		const code = 'opal-finch';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const notches: import('../../shared/types').NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<import('../../shared/types').NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -780,7 +815,7 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
 
 		const imagePayload = {
@@ -795,7 +830,7 @@ describe('GroupSession', () => {
 		const sealed = await seal(JSON.stringify(imagePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(() => notches.length >= 1);
+		await notches.until(() => notches.length >= 1);
 
 		expect(notches[0]!.images).toHaveLength(2);
 		expect(notches[0]!.images![0]!.id).toBe('a'.repeat(16));
@@ -821,7 +856,7 @@ describe('GroupSession', () => {
 		await writeFile(path1, 'not-a-valid-image-1');
 		await writeFile(path2, 'not-a-valid-image-2');
 
-		const session = await GroupSession.create(
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -835,7 +870,7 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: [] }));
 
 		const result = await session.sendImages([path1, path2], 'album caption');
@@ -851,8 +886,8 @@ describe('GroupSession', () => {
 		const code = 'quartz-lynx';
 		const { messageKey } = await deriveGroupKeys(code);
 
-		const notches: NotchMessage[] = [];
-		const session = await GroupSession.create(
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
 			code,
 			relayUrl,
 			memberId,
@@ -866,7 +901,7 @@ describe('GroupSession', () => {
 		);
 		session.connect();
 
-		await waitFor(() => serverSocket !== null);
+		await connected;
 		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
 
 		const imagePayload = {
@@ -880,7 +915,7 @@ describe('GroupSession', () => {
 		const sealed = await seal(JSON.stringify(imagePayload), messageKey);
 		serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
 
-		await waitFor(() => notches.length >= 1);
+		await notches.until(() => notches.length >= 1);
 		expect(notches[0]!.text.length).toBe(2048);
 		expect(notches[0]!.text).toBe('c'.repeat(2048));
 

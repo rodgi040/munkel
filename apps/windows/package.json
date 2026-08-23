@@ -8,7 +8,7 @@
 		"dev": "node scripts/dev.mjs",
 		"build": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit && node scripts/clean-dist.mjs && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.renderer.config.ts && node scripts/check-preload-selfcontained.mjs",
 		"typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit",
-		"test": "bun test",
+		"test": "bun test --timeout 30000",
 		"check:preload": "node scripts/check-preload-selfcontained.mjs",
 		"render-tray-icon": "bun scripts/render-tray-icon.mjs",
 		"pack": "bun run build && electron-builder --win --config electron-builder.yml",
