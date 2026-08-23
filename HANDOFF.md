@@ -1,7 +1,53 @@
+# Handoff — munkel (2026-08-23, Abend — #67 geschlossen)
+
+> **Wiederaufsetz-Punkt (2026-08-23, Abend) — #67 ist erledigt und gemerged. Nächstes Issue ist #64.**
+> Ältere Abschnitte bleiben historischer Record. Dieser Abschnitt schlägt sie alle.
+
+## current_state
+
+- **Branch:** `platform/windows/v2-clean`, Tip `16ede21` (Merge von `origin/v2-clean` nach dem #67-Fix). Enthält `918e822` (PR #72) und `1b8c842` (Signing-Doku der Parallel-Session).
+- **`origin/v2-clean` steht auf `918e822`** — der lokale Tip `16ede21` und der Doku-Commit `1b8c842` sind **noch nicht gepusht**.
+- **Uncommitted:** `HANDOFF.md` + `STATE.md` (dieser Eintrag). Bewusst untracked: `Debugging/`, `kimi-export-session_-20260722-145402.md`.
+- **Teststand:** `apps/windows` **682 pass / 0 fail** (~8 s idle), Typecheck grün, CI auf PR #72 dreifach grün.
+- **Offene Issues: 9.** #67 geschlossen, **#71 neu** (Folge-Issue).
+
+## completed (diese Session)
+
+**#67 — flaky Windows-Suite unter Last.** PR #72 → `918e822`, Tag `windows/fix/flaky-suite-under-load`, Issue von Hand geschlossen ([Kommentar](https://github.com/rodgi040/munkel/issues/67#issuecomment-5386622464)). Auto-Close greift weiterhin nicht.
+
+**Vier Ursachen, nur eine davon die im Issue vermutete.** Keine der dort genannten Konstanten war beteiligt:
+
+1. **Wanduhr-Frist um echtes I/O** — beide `waitFor`-Kopien. Nebenwirkung: die verwaiste Rejection eines abgeschossenen Tests beschuldigt den *nächsten*.
+2. **Falscher Anker** — Tests warteten auf das `connection`-Ereignis des *Servers* und handelten, als sei der *Client* offen (`sendChat` → „Circle offline"). Der Presence-Test scheiterte spiegelbildlich an einer nie garantierten Frame-Reihenfolge. **Das war der Teil, den keine Frist gefunden hätte.**
+3. **Verwaiste Sessions als Kaskaden-Verstärker** — `afterEach` schloss den Server, trennte aber nie die Session. Ein an der Frist gestorbener Test erreichte sein `disconnect()` nie und retryte weiter gegen einen toten Port. `1006`-Fehler **96 → 4**. Das erklärt, warum die fehlschlagende *Menge* zufällig aussah.
+4. **`image-codec.ts`** initialisierte zwei WASM-Module vor dem Guard, der den Aufruf zum No-op macht.
+
+**Danach blieb nur die 5000-ms-Standardfrist des Runners**, die bei ~24-facher Streckung gesunde Tests traf — auch einen `MenuWindow`-Test ohne Socket. Sie ist selbst genau die Wanduhr-Frist, die das Issue ausschließt, nur in der Runner-Vorgabe statt im Test. Auf 30 s angehoben (`bun test --timeout 30000` im Paket-Skript, greift auch in CI). Keine Produktions-Timing-Konstante geändert.
+
+**Belege:** fünf aufeinanderfolgende Lastläufe (24 Burner auf 16 Kernen, ~24-fache Streckung) je **682 pass / 0 fail**; Red/Green unter derselben Harness **674 pass / 8 fail** zurückgedreht gegen **682 / 0**. Die im Issue dokumentierte Bedingung war eine **2-fache** Streckung — verifiziert wurde bei etwa dem Zwölffachen davon. Kimi/DeepSeek read-only: **SHIP-WITH-FOLLOW-UPS**, 10/10 PASS, keine MAJOR.
+
+**Neue Konvention in `CLAUDE.md`** (unter Cross-cutting invariants): Tests warten auf Ereignisse, nie auf Fristen; echte Debounces über die gemeinsame `apps/windows/src/test-support/fake-timers.ts`; keine Fake Timer um echte Sockets; Ressourcen in `afterEach` freigeben, nicht am Ende des Testkörpers.
+
+**Beinahe-Fehler, der es wert ist, gemerkt zu werden:** eine Zwischenfassung meldete `682 pass / 0 fail`, führte aber nur **8 von 29** Tests einer Datei aus — ein `Promise.reject`-Platzhalter brach die Datei ab, und bun zählte die übersprungenen Tests nicht als Fehler. Aufgefallen **nur** durch Vergleich der Testzahl gegen die Baseline, nicht durch das grüne Summary. Behoben in `a1d3ca3`. Lehre: bei Testharness-Umbauten immer die *Anzahl* gegen die Baseline prüfen, nie nur „0 fail" lesen.
+
+## blockers
+
+- **Nicht gepusht:** lokaler `v2-clean` (`16ede21`) ist `origin` zwei Commits voraus, darunter `1b8c842` der Parallel-Session. Push ist Nutzerentscheidung, weil er fremde, möglicherweise noch in Arbeit befindliche Doku veröffentlicht.
+- **Zweite Agent-Session arbeitet in derselben Arbeitskopie.** Sie hat während dieser Session einen Commit angelegt und amendiert (`ac30abc` → `1b8c842`) und zwischenzeitlich ausgecheckt, was einen Messlauf verfälscht hat (4 Fehlschläge unter Fremdlast, nicht reproduzierbar). Bei Messungen darauf achten.
+- Sonst keine. **#69** bleibt auf einem zweiten Windows-Konto blockiert.
+
+## next_action
+
+**#64 umsetzen** — `ImagePreviewOverlay` ist importiert, aber nie gerendert. Höchster Nutzerwert der Restlichen: Hover zieht heute das Fenster auf Arbeitsflächengröße auf, klaut den Fokus und zeigt nichts. Verursacher ist als Merge `3ed68fa` nachgewiesen, das JSX aus `fa37329` geborgen. **Fallstrick:** ein wörtlicher Restore wäre falsch — `previewImage` war damals ein abgeleiteter Wert aus `previewImageID`, heute ist es der `useState` der Klick-Lightbox. Gleicher Name, andere Bedeutung.
+
+Danach #54 (vorher `.planning/p0-11` lesen), #56 (vorher `p0-12`), #53, #61, #62, #70, #71.
+
+---
+
 # Handoff — munkel (2026-08-23, Nachmittag)
 
 > **Wiederaufsetz-Punkt (2026-08-23) — Triage-Runde vollständig abgeschlossen. Nächster Schritt ist Umsetzung, nicht mehr Triage.**
-> Ältere Abschnitte bleiben historischer Record. Dieser Abschnitt schlägt sie alle.
+> Ältere Abschnitte bleiben historischer Record.
 
 ## current_state
 
