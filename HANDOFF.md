@@ -7,7 +7,8 @@
 
 - **Branch:** `platform/windows/v2-clean`, Tip `c10ed37` — **unverändert**. In dieser Session wurde **kein Code angefasst**, nur GitHub.
 - **Uncommitted:** nur `HANDOFF.md` + `STATE.md`. Bewusst untracked: `Debugging/`, `kimi-export-session_-20260722-145402.md`.
-- **Offene Issues: 9** (8 vorgefunden, #69 neu angelegt). **Alle sind triagiert** und tragen einen State — sieben `ready-for-agent` (#53, #54, #56, #61, #62, #64, #67), zwei `ready-for-human` (#60, #69).
+- **Offene Issues: 10** (8 vorgefunden, #69 und #70 neu angelegt). **Alle sind triagiert** und tragen einen State — acht `ready-for-agent` (#53, #54, #56, #61, #62, #64, #67, #70), zwei `ready-for-human` (#60, #69).
+- **Kein `release-blocker` mehr offen.** Das Team hat entschieden: **vorerst keine eigene Signierung** (Antwort auf limehq/munkel#235, dort mit der Antwort geschlossen). Windows liefert öffentlich unsigniert aus, das Risiko wird dokumentiert statt beseitigt. Details unten.
 - **Kein offener externer PR.** #45 ist eigener Draft und fällt aus der Triage-Discovery.
 - **Die `/triage`-Runde ist zu Ende.** Es gibt nichts mehr zu triagieren; jedes Issue trägt einen umsetzbaren Brief.
 
@@ -64,8 +65,9 @@
 5. **#53** — kleiner Doku-Fix, gehört zusammen mit der Korrektur von `p0-02`.
 6. **#61** — ein Konfigurationsschalter plus PRIVACY.md-Ergänzung; braucht aber einen echten Install/Uninstall/Update-Zyklus zur Verifikation.
 7. **#62** — Workflow-Umbau, muss gegen einen echten Tag-Push verifiziert werden.
-8. **#60** — blockiert auf deiner Entscheidung (Rechtsform → Anbieter).
-9. **#69** — blockiert auf einem zweiten Windows-Konto.
+8. **#70** — reiner Doku-Fix (`SECURITY.md`, `README.md`, ein Kommentar in `electron-builder.yml`), keine Abhängigkeiten, jederzeit einschiebbar. Wird durch die unsignierte Auslieferung dringender, nicht weniger dringend.
+9. **#60** — **nicht mehr blockiert, zurückgestellt.** Team hat entschieden, vorerst nicht zu signieren. Bleibt als Tracker offen, heute nichts zu tun.
+10. **#69** — blockiert auf einem zweiten Windows-Konto.
 
 ## decisions
 
@@ -78,6 +80,7 @@ Alle sieben Entscheidungen dieser Session, wortgleich wie vom User gewählt:
 - **#61: „Löschen via eingebautem Flag (empfohlen)"** — `deleteAppDataOnUninstall: true`. Deinstallieren heißt weg, inklusive Kanalcodes. Preis akzeptiert: Neuinstallation heißt alle Kanäle neu beitreten.
 - **#62: „Getrennte Tag-Namensräume (empfohlen)"** — `v*` bleibt macOS/Upstream, Windows bekommt ein eigenes Präfix. Akzeptierter Preis: Fork-spezifische Divergenz in `release.yml`.
 - **#64: „Wiederherstellen, mit sauberer Autorität (empfohlen)"** — Hover-Overlay zurück, Bindung korrigiert, ausdrückliche Regel welches System die Oberfläche besitzt.
+- **#60, nach der Team-Antwort: „Öffentlich unsigniert ausliefern, Risiko dokumentieren"** — `release-blocker` runter, das Risiko wird zur bewusst akzeptierten Position, die ehrliche Dokumentation in `SECURITY.md` und `README.md` damit zwingend und nicht optional (→ #70).
 
 Weiter gültig aus früheren Sessions:
 
@@ -86,10 +89,25 @@ Weiter gültig aus früheren Sessions:
 - **Merge-Marker ohne `v`-Präfix taggen** (`windows/fix/…`) — wird durch #62 gegenstandslos, gilt bis dahin weiter.
 - **Der graphify-Graph ist veraltet und irreführend.** Diese Session hat es erneut bestätigt: er mischt relative Pfade mit absoluten aus einem **anderen Checkout** (`C:/Users/rodgi/OneDrive/Documents/CODING/Test/munkel/...`) und zeigt weiter auf `apps/windows/src/core/control.ts` / `apps/cli/src/control.ts`, die seit PR #33 nicht existieren. Für alle Code-Fragen dieser Session wurde direkt am Code gelesen. `graphify extract --force` würde das schließen.
 
+## Nachtrag am selben Tag: Team-Antwort zu #60 — „vorerst keine eigene Signierung"
+
+Die Frage aus #60 wurde upstream als limehq/munkel#235 gestellt und beantwortet: **es wird vorerst keine Signatur-Identität beschafft.** Entscheidung des Users daraufhin: **öffentlich unsigniert ausliefern und das Risiko dokumentieren.**
+
+Angewendet:
+
+- **`release-blocker` von #60 entfernt** — das Label behauptete eine Sperre, die es nach der Entscheidung nicht mehr gibt. Es gibt jetzt **kein** offenes `release-blocker`-Issue mehr.
+- **#60 bleibt offen als Signing-Tracker**, zurückgestellt bis die Rechtsform-Frage neu aufgerufen wird. Heute nichts zu tun; die Recherche im Kommentar bleibt gültig und erspart die Neuherleitung.
+- **limehq/munkel#235 mit der Antwort geschlossen**, samt der drei nicht verfallenden Randbedingungen (keine `.pfx` mehr seit Juni 2023 auch für OV; 458 Tage Maximalgültigkeit seit März 2026; Azure-Eignung nach Rechtsform und Land).
+- **#70 neu angelegt** (`bug`, `security`, `ready-for-agent`) für die Arbeit, die aus der Entscheidung folgt.
+
+**Der Befund, der #70 nötig macht:** `SECURITY.md` beschreibt den Update-Weg ausschließlich in macOS-Begriffen („Sparkle, EdDSA-signed, notarized") **ohne zu sagen, dass das nur für macOS gilt**, und erwähnt Windows-Updates gar nicht — also auch nicht, dass `verifyUpdateCodeSignature` aus ist. `README.md:9` nennt nur das kosmetische Symptom samt Umgehung („Run anyway"). Ein Leser schließt daraus zu Recht auf dieselbe Garantie wie auf macOS. Dieselbe Fehlerklasse wie #53.
+
+Präzise Formulierung für #70, damit die Korrektur nicht ins andere Extrem kippt: **Integrität wird sehr wohl geprüft** (Prüfsumme aus `latest.yml`, über HTTPS von GitHub Releases), **die Herausgeber-Identität nicht**. Die Vertrauensgrenze ist damit der Release-Feed.
+
 ## blockers
 
-- **#60** — Beschaffungs- und Rechtsform-Entscheidung, reine Nutzerentscheidung. Einziger `release-blocker`.
-- **#69** — braucht ein zweites Windows-Benutzerkonto, gleichzeitig angemeldet.
+- **#69** — braucht ein zweites Windows-Benutzerkonto, gleichzeitig angemeldet. Einziger echter Blocker.
+- **#60** — **nicht mehr blockiert, sondern bewusst zurückgestellt.** Die Team-Antwort liegt vor; es wartet auf nichts mehr, es ist entschieden.
 - **#67** — kein harter Blocker, aber ein Aufschlag auf jeden anderen Fix; deshalb steht es an Position 1.
 - Sonst keine.
 
