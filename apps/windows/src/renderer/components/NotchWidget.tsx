@@ -11,6 +11,11 @@ import { resolveNotchResizeHeight } from '../lib/notch-resize-height';
 import { memberLabel } from '../../shared/member-label';
 import type { IncomingImage } from '../../shared/types';
 import { useImagePreview } from '../lib/useImagePreview';
+import {
+	notchPreviewWidensWindow,
+	resolveHoveredPreviewImage,
+	resolveNotchPreviewOwner,
+} from '../lib/resolve-notch-preview-owner';
 import { MAX_MESSAGE_CHARS, clampMessageText } from '@munkel/shared-wire/message-limits';
 
 const RING_RADIUS = 8;
@@ -342,11 +347,15 @@ export default function NotchWidget() {
 		}
 	}, [history]);
 
-	// Widen/restore the notch window for the overlay (Plan 14 task 6) — the
-	// main process owns the actual bounds swap (`setNotchPreviewActive`).
+	const hoveredPreviewImage = resolveHoveredPreviewImage(history, previewImageID);
+	const previewOwner = resolveNotchPreviewOwner({
+		clickLightboxOpen: imagePreviewOpen,
+		hoveredPreviewImage,
+	});
+
 	useEffect(() => {
-		void window.electronAPI.notchSetPreviewActive(!!previewImageID || imagePreviewOpen);
-	}, [previewImageID, imagePreviewOpen]);
+		void window.electronAPI.notchSetPreviewActive(notchPreviewWidensWindow(previewOwner));
+	}, [previewOwner]);
 
 	const replyOpenRef = useRef(false);
 	useEffect(() => {
@@ -860,22 +869,23 @@ export default function NotchWidget() {
 	}
 
 	return (
-		<div
-			ref={widgetRef}
-			data-testid="notch-widget"
-			className={`notch-widget ${widgetClass}`}
-			onMouseEnter={() => {
-				cancelHoverLeave();
-				setNotchHovered(true);
-			}}
-			onMouseLeave={() => {
-				scheduleHoverLeave();
-				setNotchHovered(false);
-				setHoveredEntryId(null);
-				clearPreview();
-			}}
-			onMouseMove={reportHoverCopyActivity}
-		>
+		<div className={previewOwner !== 'none' ? 'notch-root notch-root-preview-active' : 'notch-root'}>
+			<div
+				ref={widgetRef}
+				data-testid="notch-widget"
+				className={`notch-widget ${widgetClass}`}
+				onMouseEnter={() => {
+					cancelHoverLeave();
+					setNotchHovered(true);
+				}}
+				onMouseLeave={() => {
+					scheduleHoverLeave();
+					setNotchHovered(false);
+					setHoveredEntryId(null);
+					clearPreview();
+				}}
+				onMouseMove={reportHoverCopyActivity}
+			>
 			{history.length > 0 && ui === 'collapsed' && (
 				<div className="notch-hover-target" onMouseEnter={reopenFromHoverTarget} />
 			)}
@@ -905,7 +915,7 @@ export default function NotchWidget() {
 				) : null}
 			</div>
 
-			{previewImage && (
+			{previewOwner === 'click-lightbox' && previewImage && (
 				<div className="image-lightbox-overlay" onClick={closePreview}>
 					<div className="image-lightbox-backdrop" />
 					<div className="image-lightbox-card" onClick={(e) => e.stopPropagation()}>
@@ -927,6 +937,16 @@ export default function NotchWidget() {
 						)}
 					</div>
 				</div>
+			)}
+		</div>
+			{previewOwner === 'hover-overlay' && previewImageID && hoveredPreviewImage && (
+				<ImagePreviewOverlay
+					previewImageID={previewImageID}
+					image={hoveredPreviewImage}
+					fullDataBase64={fullImages.get(previewImageID) ?? null}
+					failed={failedImages.has(previewImageID)}
+					notchHeight={widgetRef.current?.offsetHeight ?? NOTCH_DEFAULT_HEIGHT_FALLBACK}
+				/>
 			)}
 		</div>
 	);

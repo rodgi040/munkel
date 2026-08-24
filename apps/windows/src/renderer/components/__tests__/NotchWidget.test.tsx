@@ -2009,11 +2009,19 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 	beforeEach(() => {
 		electronApi = createMockElectronApi();
 		(globalThis as unknown as {
-			window: { electronAPI: typeof electronApi; addEventListener: unknown; removeEventListener: unknown };
+			window: {
+				electronAPI: typeof electronApi;
+				addEventListener: unknown;
+				removeEventListener: unknown;
+				innerWidth: number;
+				innerHeight: number;
+			};
 		}).window = {
 			electronAPI: electronApi,
 			addEventListener: () => {},
 			removeEventListener: () => {},
+			innerWidth: 1280,
+			innerHeight: 800,
 		};
 		originalResizeObserver = (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
 		delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
@@ -2084,3 +2092,172 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 		});
 	});
 });
+
+describe('NotchWidget hover Quick-Look overlay (#64)', () => {
+	let electronApi: ReturnType<typeof createMockElectronApi>;
+	let originalResizeObserver: unknown;
+	let previewActiveCalls: boolean[];
+
+	function makeAlbumMessage(images: NotchMessage['images']): NotchMessage {
+		return {
+			sender: 'Alice',
+			senderMemberId: 'alice-id',
+			text: 'album',
+			isDirect: false,
+			group: 'test-circle',
+			groupColor: '#3b82f6',
+			receivedAt: new Date().toISOString(),
+			images,
+		};
+	}
+
+	beforeEach(() => {
+		electronApi = createMockElectronApi();
+		previewActiveCalls = [];
+		electronApi.notchSetPreviewActive = (active: boolean) => {
+			previewActiveCalls.push(active);
+			return Promise.resolve();
+		};
+		(globalThis as unknown as {
+			window: {
+				electronAPI: typeof electronApi;
+				addEventListener: unknown;
+				removeEventListener: unknown;
+				innerWidth: number;
+				innerHeight: number;
+			};
+		}).window = {
+			electronAPI: electronApi,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+			innerWidth: 1280,
+			innerHeight: 800,
+		};
+		originalResizeObserver = (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+		delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+	});
+
+	afterEach(() => {
+		delete (globalThis as unknown as { window?: unknown }).window;
+		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
+	});
+
+	function wait(ms: number) {
+		return new Promise<void>((resolve) => setTimeout(resolve, ms));
+	}
+
+	async function renderWidget() {
+		let root: ReturnType<typeof create>;
+		await act(async () => {
+			root = create(
+				<AppProvider>
+					<NotchWidget />
+				</AppProvider>,
+			);
+			await Promise.resolve();
+		});
+		return root!;
+	}
+
+	function thumbs(root: ReturnType<typeof create>) {
+		return root.root.findAllByProps({ className: 'image-preview-thumb' });
+	}
+
+	function overlayNodes(root: ReturnType<typeof create>) {
+		return root.root.findAll((node) => node.props['data-testid'] === 'image-preview-overlay');
+	}
+
+	it('renders the hover overlay after the debounce and paints the hovered thumbnail', async () => {
+		const root = await renderWidget();
+		await act(async () => {
+			electronApi.simulateNotchMessage(
+				makeAlbumMessage([
+					{ id: 'img-1', width: 100, height: 80, thumb: 'THUMBONE', mime: 'image/avif' },
+					{ id: 'img-2', width: 120, height: 90, thumb: 'THUMBTWO', mime: 'image/avif' },
+				]),
+			);
+		});
+
+		expect(overlayNodes(root).length).toBe(0);
+
+		await act(async () => {
+			thumbs(root)[1]!.props.onMouseEnter();
+		});
+		expect(overlayNodes(root).length).toBe(0);
+		expect(previewActiveCalls.filter((value) => value).length).toBe(0);
+
+		await act(async () => {
+			await wait(220);
+		});
+
+		expect(overlayNodes(root).length).toBe(1);
+		const overlayImg = overlayNodes(root)[0]!.findByType('img');
+		expect(overlayImg.props.src).toContain('THUMBTWO');
+		expect(previewActiveCalls).toContain(true);
+		expect(
+			root.root.findAll((node) => typeof node.props.className === 'string' && node.props.className.includes('notch-root-preview-active'))
+				.length,
+		).toBe(1);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+
+	it('does not stack the hover overlay on top of the click lightbox', async () => {
+		const root = await renderWidget();
+		await act(async () => {
+			electronApi.simulateNotchMessage(
+				makeAlbumMessage([{ id: 'img-1', width: 100, height: 80, thumb: 'THUMBONE', mime: 'image/avif' }]),
+			);
+		});
+
+		const thumb = thumbs(root)[0]!;
+		await act(async () => {
+			thumb.props.onMouseEnter();
+			await wait(220);
+		});
+		expect(overlayNodes(root).length).toBe(1);
+
+		await act(async () => {
+			thumb.props.onClick({ stopPropagation: () => {} });
+		});
+
+		expect(root.root.findAllByProps({ className: 'image-lightbox-overlay' }).length).toBe(1);
+		expect(overlayNodes(root).length).toBe(0);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+
+	it('restores compact width when neither preview surface is showing', async () => {
+		const root = await renderWidget();
+		await act(async () => {
+			electronApi.simulateNotchMessage(
+				makeAlbumMessage([{ id: 'img-1', width: 100, height: 80, thumb: 'THUMBONE', mime: 'image/avif' }]),
+			);
+		});
+
+		const thumb = thumbs(root)[0]!;
+		await act(async () => {
+			thumb.props.onMouseEnter();
+			await wait(220);
+		});
+		expect(previewActiveCalls).toContain(true);
+
+		const widget = root.root.findByProps({ 'data-testid': 'notch-widget' });
+		await act(async () => {
+			thumb.props.onMouseLeave();
+			widget.props.onMouseLeave();
+		});
+
+		expect(overlayNodes(root).length).toBe(0);
+		expect(previewActiveCalls.at(-1)).toBe(false);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+});
+
