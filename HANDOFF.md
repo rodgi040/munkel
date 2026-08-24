@@ -5,9 +5,9 @@
 
 ## current_state
 
-- **Branch:** `platform/windows/v2-clean`, Tip `9976f8e`. Kein offener Feature-Branch — der Sub-Branch zu #67 ist lokal und remote gelöscht.
-- **`origin/v2-clean` steht auf `918e822`** — lokal **4 Commits voraus**: `16ede21` (Merge), `d1896d5` + `9976f8e` (Doku) und `1b8c842` (Signing-Doku der Parallel-Session). **Noch nicht gepusht**, bewusst: der Push würde `1b8c842` mitveröffentlichen, das nicht von mir stammt.
-- **Uncommitted:** nur `HANDOFF.md` (dieser Eintrag). Bewusst untracked: `Debugging/`, `kimi-export-session_-20260722-145402.md`.
+- **Branch:** `platform/windows/v2-clean`, Tip `f665dc7`. Kein offener Feature-Branch — der Sub-Branch zu #67 ist lokal und remote gelöscht.
+- **Alles committet und gepusht.** `HEAD == origin/platform/windows/v2-clean`, `git status` leer. Der Push enthielt auch `1b8c842` (Signing-Doku der Parallel-Session) — vom User ausdrücklich freigegeben.
+- **Keine untracked-Dateien mehr:** `Debugging/` und die Sub-Agent-Transkripte sind jetzt in `.gitignore` (siehe unten).
 - **Teststand:** `apps/windows` **682 pass / 0 fail** (~8 s idle), Typecheck grün, CI auf PR #72 dreifach grün.
 - **Offene Issues: 11.** #67 geschlossen; **#71 und #73 in dieser Session neu angelegt**.
 
@@ -35,6 +35,8 @@
 - **#71** — 26 verbliebene Wanduhr-Schlafe in `hover-copy-shortcut.test.ts` (12), `NotchWidget.test.tsx` (10), `Avatar.test.tsx` (4). Keiner ist in einem Lastlauf aufgefallen; Härtung, kein Defekt. `MenuWindow.test.tsx` dient als gearbeitetes Beispiel.
 - **#73** — auf deine Fehlermeldung hin untersucht: `Deploy Landing Preview` scheitert bei **jedem** Push auf `v2-clean` und war im Fork **nie** grün (**12 von 12 rot seit 22.07.**). Ursache: keine Repo-Secrets gesetzt (`gh secret list` leer), `wrangler versions upload` bricht ab. Ausgelöst wird er über den **kumulativen** Diff von Draft-PR #45 (`v2-clean → main`), der dauerhaft `package.json`/`bun.lock`/`turbo.json` berührt — deshalb feuert er auch bei reinen Test-Commits. Der Guard `head.repo.full_name == github.repository` greift nicht, weil #45 ein Same-Repo-PR ist. **Kein Regressionssignal**, verwandt mit #62.
 
+**Repo-Hygiene (`f665dc7`).** `Debugging/` und die Sub-Agent-Transkripte lagen über Sessions hinweg untracked herum, sodass `git status` nie leer wurde und aufhörte, ein Signal zu sein — dieselbe Entwertungs-Mechanik wie die immer-rote CI aus #73 und das „grün diesmal" aus #67. Jetzt in `.gitignore`, als Muster über **alle drei** externen Sub-Agents (`kimi-`/`codex-`/`cursor-export-session_*.md`), damit der Fall nicht beim nächsten Anbieter wiederkehrt. Die Regel steht in `CONTRIBUTING.md` → „Local working files": *eine Datei wird ignoriert, wenn ihr Wert mit der Aufgabe verfällt; was die Aufgabe überdauern soll, gehört in Issue, PR oder `docs/`.*
+
 ## remaining (in Reihenfolge)
 
 1. **#64** — `ImagePreviewOverlay` importiert, aber nie gerendert. Siehe `next_action`.
@@ -56,6 +58,8 @@ Diese Session, wortgleich wie gewählt:
 - **„Frist anheben (empfohlen)"** — Runner-Frist 5 s → 30 s. Begründung: die 5000 ms sind selbst die Wanduhr-Frist um echtes I/O, die das Issue ausschließt, nur in der Runner-Vorgabe statt im Test.
 - **„Nur den erfassten MenuWindow-Fall (empfohlen)"** — ein Schlaf umgestellt, die übrigen 26 als #71. **Nachträgliche Korrektur:** die Begründung trug nicht — der in B3 erfasste `MenuWindow`-Fehlschlag ist ein *anderer* Test ohne eigenen Timer. Die Umstellung ist Konsistenzarbeit, kein Fix für jenen Fehlschlag. Steht so auch im PR und im Close-Kommentar.
 - **„Nein, nur als Issue erfassen"** — #73 wird nicht sofort gefixt, nur dokumentiert.
+- **„kannst du machen wenn es sinnvoll ist, aber dokumentiere das in der project dokumentation"** — daraufhin `.gitignore` statt Commit der Dateien (ein 104-KB-Sitzungsprotokoll gehört nicht in die Historie), Muster auf alle drei Sub-Agents ausgeweitet, Regel in `CONTRIBUTING.md` festgehalten. Ging direkt auf `v2-clean` wie die übrigen Doku-Commits — für vier `.gitignore`-Zeilen wäre ein eigener PR Zeremonie; explizit zur Korrektur angeboten.
+- **Backup-Branches bleiben lokal** — weder gepusht (tote Branches im geteilten Repo) noch gelöscht (sie sind das Sicherheitsnetz für genau die Unsicherheit, die `git cherry` nicht auflösen kann). Siehe `blockers`.
 
 Weiter gültig aus früheren Sessions:
 
@@ -66,7 +70,7 @@ Weiter gültig aus früheren Sessions:
 
 ## blockers
 
-- **Nicht gepusht:** lokaler `v2-clean` (`9976f8e`) ist `origin` **4 Commits voraus**, darunter `1b8c842` der Parallel-Session. Der Push ist Nutzerentscheidung, weil er fremde, möglicherweise noch in Arbeit befindliche Doku mitveröffentlicht. **Erste Frage der nächsten Session an den User.**
+- **Push erledigt** — der frühere Vorbehalt ist ausgeräumt: `origin` und lokal sind identisch (`f665dc7`), `1b8c842` der Parallel-Session ist mit Freigabe des Users mitveröffentlicht.
 - **Zweite Agent-Session arbeitet in derselben Arbeitskopie.** Sie hat während dieser Session einen Commit angelegt und amendiert (`ac30abc` → `1b8c842`) und zwischenzeitlich ausgecheckt. Das hat einen Messlauf verfälscht — ein „Leerlauf"-Lauf brauchte 129 s statt 10 s und meldete 4 Fehlschläge, die auf ruhiger Maschine nicht reproduzierbar waren. **Vor jeder Messung CPU-Last prüfen**, sonst misst man Fremdlast.
 - **Zwei Backup-Branches existieren nur lokal — nicht löschen.** `backup/pre-reconcile-78feefd` (9 Commits) und `platform/windows/notch-history-and-preview-fix-pre-reconcile` (7 Commits), Stand 22.07., aus der Reconciliation vom 17.08. `git cherry` meldet die Patches als *nicht* auf `origin` — das ist **kein** Beleg für verlorene Arbeit, sondern die Folge davon, dass die Änderungen damals auf eine neue Basis neu aufgesetzt wurden, wodurch sich die Patch-IDs ändern. Die Zuordnung steht in `STATE.md` (`cc5ba84`, `a3f3966`, `bffcbee`, `9e4165c` → reconciliierter Branch, gemerged über PR #47, danach 654 pass / 0 fail). Mechanisch beweisen lässt sich das nicht, und `origin` ist inzwischen 151 Commits voraus — **genau dafür sind die Refs da.** Bewusst nicht gepusht (tote Branches im geteilten Repo) und bewusst nicht gelöscht.
 - Sonst keine. **#69** bleibt auf einem zweiten Windows-Konto blockiert; **#60** ist zurückgestellt, nicht blockiert.
