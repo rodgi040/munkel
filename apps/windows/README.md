@@ -118,9 +118,9 @@ The dev server binds the first free port starting at **5174** (override with
 use 5173.
 
 On Linux Cloud Agent desktops (XFCE without a GPU), Electron will not paint
-until software rendering is on. `.cursor/environment.json` writes
-`MUNKEL_ELECTRON_DISABLE_GPU=1`, `ELECTRON_DISABLE_SANDBOX=1`, and
-`LIBGL_ALWAYS_SOFTWARE=1` into `~/.profile` / `~/.bashrc` so later `bun run
+until software rendering is on. `.cursor/environment.json` writes bun onto
+`PATH` and sets `MUNKEL_ELECTRON_DISABLE_GPU=1`, `ELECTRON_DISABLE_SANDBOX=1`,
+and `LIBGL_ALWAYS_SOFTWARE=1` in `~/.profile` / `~/.bashrc` so later `bun run
 dev` still sees them. `scripts/dev.mjs` then passes `--disable-gpu
 --in-process-gpu` and `--no-sandbox` when those variables are `1`.
 
