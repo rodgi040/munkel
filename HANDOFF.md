@@ -1,3 +1,116 @@
+# Handoff — munkel (2026-08-28 — Cloud-Env, Linux-Smoke, #78/#79; Pause)
+
+> **Wiederaufsetz-Punkt (2026-08-28) — Cloud-Agent kann Windows-Munkel auf Linux/XFCE malen. GPU-Persistenz liegt in Draft-PR #79. Nächster Code-Schritt ist #80 triagieren (weite Profile-Flags), nicht blind #79 mergen. Höchster Produkt-Bug bleibt #64 (Draft-PR #77).**
+> Ältere Abschnitte bleiben historischer Record. Dieser Abschnitt schlägt sie alle.
+> **Diese Pause liegt auf `cursor/windows-cloud-env-a2fd` (PR #79), nicht auf `v2-clean`.** Wer auf `origin/platform/windows/v2-clean` (`fad8364`) startet, sieht sie nicht, bis #79 merget.
+
+## current_state
+
+- **Branch:** `cursor/windows-cloud-env-a2fd`. Code-Tip **`f28f240`**; dieser Pause-Commit (nur `HANDOFF.md` + `STATE.md`) liegt darüber. Tracking `origin/cursor/windows-cloud-env-a2fd` nach Push. Basis `origin/platform/windows/v2-clean` = **`fad8364`**. Die zwei Fix-Commits: `260fc1b` (GPU/Sandbox-Persistenz), `f28f240` (bun auf Login-PATH).
+- **Arbeitsbaum nach der Pause leer.** Overlay-Branch **nicht** in diesen Branch gemerged (Absicht: Ship-Baseline-Smoke auf v2-clean + Spawn-Args).
+- **PRs:** Draft **[#79](https://github.com/rodgi040/munkel/pull/79)** → `v2-clean`, `mergeable_state: clean`, CI **windows / macos / checks grün** (Lauf `33145596015`). Draft **[#77](https://github.com/rodgi040/munkel/pull/77)** (#64 Overlay) ebenfalls clean + CI grün, HEAD `c551702`. Draft **[#45](https://github.com/rodgi040/munkel/pull/45)** bleibt `v2-clean → main` — **nicht ready markieren**.
+- **Teststand dieser Branch:** `apps/windows` **681 pass / 1 skip / 0 fail**, Typecheck grün. Skip = `preload.cjs`, wenn `dist/` nicht gebaut ist. HANDOFF 23.08. zählte **682 pass** (Skip als Pass oder andere Zählung). Overlay-PR #77: **691 pass / 1 skip / 0 fail** (zusätzliche Overlay-Tests, nicht auf diesem Branch).
+- **Offene Issues: 16** (Stand Pause, `list_issues` OPEN). Neu seit 23.08.: **#74, #75, #76, #78, #80**. **#78** hat Fix in #79, Issue noch offen. **#80** (05:58Z, `needs-triage`) ist der Follow-up auf die Form von #79. **Kein `release-blocker`.**
+- **Cloud-Environment:** persönlicher Draft, public id `a278655e-a2a2-11f1-b532-320a589b8025`, version `ac81b48b-a2a3-11f1-b532-320a589b8025`, `source: Override`, **Dashboard-`url: null`** — keine erfundene URL erfinden. Snapshot `snapshot-20260828-dbc4002d-9c4a-4c88-8473-8e3b9d823169` **READY**. Builds: `bld-20260828-e48bd239-7758-4315-a389-718b7114afde` (PATH-Fix, SUCCEEDED, das vorgeschlagene) und älter `bld-20260828-295914c2-1668-42f0-9d98-5b64109e44d3` (SUCCEEDED, aber frischer Agent hatte bun nicht auf Login-PATH). **User muss Save im Environment-Panel klicken** — das ist keine Agent-Aktion. Dieser Lauf bootete JIT (`build: null`), nicht von dem Snapshot.
+- **Diese VM jetzt:** bun **1.4.0** auf PATH, `MUNKEL_ELECTRON_DISABLE_GPU=1`, `ELECTRON_DISABLE_SANDBOX=1`, `LIBGL_ALWAYS_SOFTWARE=1` in Env und in `~/.profile` / `~/.bashrc` (Marker `# munkel-cloud-electron-gpu`, `# munkel-cloud-bun-path`). Agent `bc-b9ffd08d-3941-43c6-8fac-afb8c3d4a2fd`. Overlay-Agent war `bc-abde0899-cbc2-4081-990d-1fef09df93eb`.
+- **Skills fehlen in diesem Checkout:** `skills/fp-pause/SKILL.md` und `skills/fp-resume/SKILL.md` existieren nicht. Pause rekonstruiert aus dem bestehenden HANDOFF/STATE-Format (Deutsch, neuen Abschnitt vorn, Altes als Historie). Ein erster `/fp-pause`-Versuch in derselben Session wurde durch Kontextkürzung unterbrochen, **bevor** diese Dateien geschrieben waren — das hier ist die abgeschlossene Pause.
+- **Backup-Branches dieser Cloud-VM: keine.** `backup/pre-reconcile-78feefd` und `…-pre-reconcile` existieren nur auf der alten lokalen Maschine (23.08.). Hier weder lokal noch auf origin. Nicht löschen, falls sie woanders noch liegen; von hier nicht wiederherstellbar.
+
+## completed (diese Session)
+
+**Ziel war:** Munkel auf dem Cloud-Agent so aufsetzen, dass Windows bald shippen kann — zuerst Plan, dann ausführen. `main` hat **kein** `apps/windows`; deshalb Branch von `origin/platform/windows/v2-clean`, nicht von `main`.
+
+**#78 — GPU-Flags überleben `start` nicht.** Cursor `start` ist ein einmaliger Subprocess; `export` stirbt mit ihm. `dev.mjs` hängt `--disable-gpu --in-process-gpu` nur an, wenn `MUNKEL_ELECTRON_DISABLE_GPU === '1'` **beim Spawn**. Fix in `260fc1b`: `install` und `start` schreiben die drei Flags idempotent nach `~/.profile` und `~/.bashrc`; `dev.mjs` reicht zusätzlich `--no-sandbox` durch, wenn `ELECTRON_DISABLE_SANDBOX === '1'`. XFCE-`systray` wird in `start` angelegt, falls fehlend. Electron wird **nicht** automatisch gestartet.
+
+**Zweite Lücke derselben Klasse — bun nicht auf Login-PATH.** Der bun-Installer mutiert nur `.bashrc`; non-interactive Login-Shells `return`en dort, Ubuntu `.profile` sourct `.bashrc` zu spät / gar nicht. Frischer Agent auf dem ersten Draft-Build: `command -v bun` leer. Fix `f28f240`: `BUN_INSTALL` + PATH in dieselben Profiles. Verify: `env -i bash -lc` findet bun 1.4.0 und die GPU-Flags.
+
+**Linux/XFCE-Smoke (DISPLAY=:1), nicht Windows-Release-Gate.** Tray-Icon + Kontextmenü (Show Menu, Quick send…, Inject fake notch messages, Quit). Circle `blue-table-42` gejoined, Display-Name kurz CloudQA, danach `~/.config/munkel` gelöscht. Fake-Injector: Notch-Nachrichten (Jordan/Harper/Ellis …) oben-mittig, Hover expandiert, Leave retractet. Quick-Send-Palette „Everyone in blue-table-42“, Escape schließt. **Nicht getestet:** native Named Pipes / DACL, NSIS Install/Uninstall/Update, Authenticode, **Live-Image-Hover-Overlay** (Injector ist text-only — das ist #64 / PR #77). Flackern und „Esc“-Overlay in Aufnahmen sind der computerUse-Agent, kein Munkel-Bug.
+
+Walkthrough-Artefakte wurden in der Session unter `/opt/cursor/artifacts/` abgelegt (`munkel_menu_empty_circles.webp`, `munkel_joined_blue_table_42.webp`, `munkel_tray_context_menu.webp`, `munkel_notch_message_jordan.webp`, `munkel_notch_expanded_history.webp`, `munkel_quick_send_palette.webp`, `munkel_tray_notch_inject_and_retract.mp4`). **Auf dieser Pause-VM ist `/opt/cursor/artifacts/` leer** (nur `cloud-agent-transcripts/`) — die Dateien gehören zum User-facing Upload der damaligen Session, nicht zum Git-Tree.
+
+**Environment vorgeschlagen, nicht gespeichert.** `propose-environment-json` mit Build `bld-20260828-e48bd239-…`. User: **Save im Environment-Panel**.
+
+**Nicht getan (bewusst):** Overlay #77 nicht in diesen Branch geholt. limehq/munkel#80 nicht angefasst. #45 nicht ready. Kein Merge nach `v2-clean`.
+
+## remaining (in Reihenfolge)
+
+1. **#80 triagieren** (`needs-triage`, [Issue](https://github.com/rodgi040/munkel/issues/80)). GPU- und Sandbox-Flags in `~/.profile` gelten für **jede** Electron-Session dieses Users, nicht nur `bun run dev`. GPU ist der Paint-Fix, Sandbox-aus der Container-Preis; beides in der User-Shell vermischt sie. Darf nicht ins Windows-Produkt / den Installer. Vorschlag im Issue: Flags in eine Cloud-only-Datei, die nur `dev.mjs` liest, oder in die Umgebung, die `bun run dev` erbt. **Bun-PATH darf in den Profiles bleiben.** `environment.json` darf nicht in einem Windows-Installer landen.
+2. **User: Cloud-Environment speichern**, falls künftige Agenten mit bun+GPU+systray booten sollen. Snapshot READY. Ohne Save bootet der nächste Agent wieder JIT / ohne die persistierten Profiles im Image.
+3. **#79 mergen** (nach #80-Entscheidung; ggf. auf diesem Branch nachschärfen), danach **#78 von Hand schließen**. Auto-Close greift auf `v2-clean` nicht. `Closes #78` in der PR-Beschreibung ist nur Dokumentation.
+4. **#77 auf die neue `v2-clean` rebasen, dann mergen, #64 von Hand schließen.** Konfliktfläche: beide PRs rühren `.cursor/environment.json` und `apps/windows/scripts/dev.mjs`. **#77s `start` ist die kaputte Export-Form von #78** — nach Rebase die Persistenz von #79 (bzw. die nach #80 verengte Form) behalten, nicht die Exports von #77. `dev.mjs`: #79 hat GPU **und** `--no-sandbox`; #77 nur GPU. Overlay-JSX nicht verbatim restoren (`previewImage` = Klick-Lightbox). Live Image-Hover-QA fehlt weiterhin.
+5. **#54** — Speicher-Guard. **Vorher `.planning/p0-11` lesen** (Datei ist gitignored, lokal/History): Upload-Parallelität behalten, nur Read-Nebenläufigkeit beschränken. IPC-Pfad, nicht CLI.
+6. **#56** — Update-Wedge. **Vorher `.planning/p0-12` lesen**; den pinnenden Test in `update-service.test.ts` umschreiben, nicht „reparieren“.
+7. **#53** + Korrektur `.planning/p0-02`; **#61** (`deleteAppDataOnUninstall: true` ist die Entscheidung); **#62** Tag-Namespaces; **#70** SECURITY.md unsigned Windows.
+8. Später: **#71** Wanduhr-Schlafe, **#73** Landing-Preview immer rot im Fork.
+9. Human: **#60** Signing zurückgestellt; **#74** unsigned Publish nach `rodgi040/munkel`; **#69** zweites Windows-Konto; **#76** dirty upstream limehq#80; **#75** leftover-P0-Dump — nicht als ein Ticket umsetzen.
+
+## decisions
+
+Diese Session:
+
+- **Windows-Arbeit von `v2-clean`, nie von `main`.** `main` hat kein `apps/windows`.
+- **Overlay #77 nicht in den Env-Branch mergen** — Smoke sollte die Ship-Baseline malen, nicht den Overlay-Diff.
+- **GPU-Flags in Profiles, nicht nur `export` in `start`** — das war die #78-Ursache. **#80 sagt: diese Form ist zu weit.** Die Entscheidung „Profiles vs. Cloud-only-Datei“ ist **offen**; nicht so tun, als wäre #79 die endgültige Form.
+- **`start` startet Electron nicht.** Nur Flags persistieren + optional systray.
+- **Linux-Smoke ist kein Windows-Release-Gate.** Named Pipe, NSIS, Authenticode bleiben ungetestet.
+- **Environment Save ist User-Aktion.** Agent darf Speichern nicht behaupten.
+- Pause-Skill-Datei fehlt; Format = bestehendes HANDOFF/STATE.
+
+Weiter gültig:
+
+- PRs nach `platform/windows/v2-clean`, nie `main`. Merge `--no-ff`. Tags **ohne** `v-`Präfix (`windows/fix/…`), sonst feuert `release.yml`.
+- Auto-Close greift nicht; Issues nach Merge von Hand schließen.
+- Red/Green vor Merge; vor dem Experiment committen.
+- **Nicht** limehq/munkel#80 mergen (`mergeable_state: dirty`, 342 Commits, HANDOFF + Jurij-husky-Pin). #45 nicht ready.
+- Overlay nicht verbatim restoren.
+- Graphify nicht benutzen (Husky `post-commit` stirbt mit 127 / `graphify`; Commits gehen trotzdem durch — Fork-Thema #76).
+- Querverweise auf `.planning/p0-02/11/12` stehen nur hier, **nicht in den Issues #53/#54/#56**.
+
+## blockers
+
+- **#80 ist untriagiert** und kann die Merge-Form von #79 ändern. Kein Merge von #79, ohne das Issue gelesen zu haben.
+- **Environment nicht gespeichert** (`url: null`). Nächster Agent ohne Save hat bun/GPU nicht im Image, nur im Repo-`environment.json` `install`/`start`.
+- **#64 live nicht QA’d** (kein Image im Injector). Unit-Tests sind in #77, nicht hier.
+- **#69** zweites Windows-Konto; **#60** zurückgestellt, nicht blockiert.
+- **Zwei Agenten dürfen dieselbe Arbeitskopie nicht teilen** (23.08.: Messlauf verfälscht). Dieses Cloud-Checkout ist isoliert; die alten lokalen Backup-Refs sind hier nicht.
+- Sonst keine harten Blocker für den nächsten Agenten. Queue ist klar.
+
+## next_action
+
+**#80 triagieren und #79 ggf. auf diesem Branch nachschärfen** (GPU/Sandbox aus der User-Shell raus, bun-PATH darf bleiben; Cloud-only-Datei oder Vererbung in `bun run dev`). Dann User-Save des Environments, Merge #79, #78 von Hand schließen, #77 rebase (Persistenz behalten), Merge, #64 von Hand schließen. Danach Produkt-Bugs **#54 → #56**.
+
+Nicht als Nächstes: limehq#80, #45 ready, Overlay-JSX verbatim, Graphify, `v*`-Tag, NSIS auf dieser Linux-VM.
+
+## suggested_skills
+
+- `/fp-resume` zum Wiederaufsetzen — **Datei `skills/fp-resume/SKILL.md` fehlt in diesem Repo**; Resume = diesen Abschnitt + PR #79/#77 + Issues #80/#78/#64 lesen.
+- `/fp-pause` — **Datei `skills/fp-pause/SKILL.md` fehlt ebenfalls**; Format ist dieser Datei.
+- `/fp-debug` für #64, falls Overlay nach Rebase noch nicht malt.
+- `.claude/skills/github-issue-workflow/SKILL.md` gilt für **main/squash**. Windows: Branch von `v2-clean`, PR nach `v2-clean`, Merge `--no-ff`, Issue von Hand schließen. Nicht die main-Regel wörtlich auf Windows anwenden.
+- `gh` gegen `--repo rodgi040/munkel`. Hostinger-MCP ist für diese App irrelevant.
+- **Nicht** `graphify`.
+
+## self_verify (Pause 2026-08-28)
+
+Geprüft, nichts Wichtiges weggelassen:
+
+| Fakt | Quelle |
+|---|---|
+| Branch clean; Pause-Docs committed on top of `f28f240` | `git status` / `rev-parse` |
+| PR #79 draft, clean, CI 3× success | GitHub `pull_request_read` + check_runs |
+| PR #77 draft, clean, CI 3× success, Overlay nicht in diesem Branch | GitHub + `git log v2-clean..HEAD` |
+| #78 offen, Fix in #79 | `issue_read` |
+| **#80 neu**, needs-triage, weite Profile-Flags | `list_issues` 28.08. 05:58Z |
+| 16 offene Issues | `list_issues` OPEN |
+| Environment Draft, url null, Snapshot READY, zwei SUCCEEDED builds | `environment-info` / `list-environment-builds` / `check-environment-snapshot` |
+| bun 1.4.0 + GPU-Flags in dieser Shell | `command -v bun`, env, `~/.profile` |
+| Pause-Skills fehlen | Glob `skills/fp-pause`, `skills/fp-resume` |
+| Backup-Refs hier nicht vorhanden | `git branch -a` |
+| Artefakt-Ordner auf Pause-VM leer | `ls /opt/cursor/artifacts` |
+| Queue leer, diese Pause ist die aktuelle User-Nachricht | `get-message-queue` |
+
+---
+
 # Handoff — munkel (2026-08-23, Abend — #67 geschlossen)
 
 > **Wiederaufsetz-Punkt (2026-08-23, Abend) — #67 ist erledigt und gemerged. Nächstes Issue ist #64.**

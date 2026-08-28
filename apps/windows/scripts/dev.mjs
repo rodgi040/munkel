@@ -130,7 +130,14 @@ function startOrRestartElectron() {
 			}
 		}
 	}
-	electronProcess = spawn(getElectronPath(), [path.join(root, 'dist', 'main.cjs')], {
+	const extraArgs = [];
+	if (process.env.MUNKEL_ELECTRON_DISABLE_GPU === '1') {
+		extraArgs.push('--disable-gpu', '--in-process-gpu');
+	}
+	if (process.env.ELECTRON_DISABLE_SANDBOX === '1') {
+		extraArgs.push('--no-sandbox');
+	}
+	electronProcess = spawn(getElectronPath(), [...extraArgs, path.join(root, 'dist', 'main.cjs')], {
 		stdio: 'inherit',
 		env: childEnv,
 	});
