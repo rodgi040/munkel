@@ -59,6 +59,9 @@ Electron app, using `electron-updater` with a GitHub Releases feed.
    - Extend `.github/workflows/release.yml` with a Windows job that builds the
      installer and uploads `Munkel-Setup-*.exe`, `latest.yml`, and blockmap files
      to the GitHub release.
+      (Since shipped: the Windows job lives in its own workflow,
+      `.github/workflows/release-windows.yml`, triggered by `win-v*` tags —
+      see the **Tag namespaces** section of `RELEASING.md`.)
    - Update `.github/workflows/ci.yml` to run `bun run pack:installer` as a
      smoke test.
 
