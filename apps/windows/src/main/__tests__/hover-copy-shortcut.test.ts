@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import {
 	createHoverCopyController,
 	handleNotchSetInteractive,
@@ -6,6 +6,7 @@ import {
 	type GlobalShortcutApi,
 	type HoverCopyWindowLike,
 } from '../hover-copy-shortcut';
+import { FakeTimers } from '../../test-support/fake-timers';
 
 function mockShortcutApi(options?: { registerReturns?: boolean }): {
 	api: GlobalShortcutApi;
@@ -27,10 +28,6 @@ function mockShortcutApi(options?: { registerReturns?: boolean }): {
 			},
 		},
 	};
-}
-
-function wait(ms: number) {
-	return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 describe('createHoverCopyController (Plan 12 P3.2)', () => {
@@ -137,48 +134,61 @@ describe('createHoverCopyController (Plan 12 P3.2)', () => {
 });
 
 describe('hover-copy idle disarm (review CRITICAL 3)', () => {
-	it('auto-disarms after idleMs without an activity ping', async () => {
+	let timers: FakeTimers;
+
+	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
+	});
+
+	afterEach(() => {
+		timers.restore();
+	});
+
+	it('auto-disarms after idleMs without an activity ping', () => {
+		const idleMs = 25;
 		const { api, unregisterCalls } = mockShortcutApi();
-		const controller = createHoverCopyController(() => {}, api, { idleMs: 25 });
+		const controller = createHoverCopyController(() => {}, api, { idleMs });
 
 		controller.setActive(true);
 		expect(controller.isActive).toBe(true);
 
-		await wait(60);
+		timers.advance(idleMs);
 
 		expect(controller.isActive).toBe(false);
 		expect(unregisterCalls).toEqual(['C']);
 	});
 
-	it('activity pings (setActive(true) while armed) push the idle deadline out', async () => {
+	it('activity pings (setActive(true) while armed) push the idle deadline out', () => {
+		const idleMs = 50;
 		const { api, registerCalls } = mockShortcutApi();
-		const controller = createHoverCopyController(() => {}, api, { idleMs: 50 });
+		const controller = createHoverCopyController(() => {}, api, { idleMs });
 
 		controller.setActive(true);
-		await wait(25);
-		controller.setActive(true); // ping — resets the 50ms deadline
-		await wait(25);
-		controller.setActive(true); // ping again
-		await wait(25);
+		timers.advance(25);
+		controller.setActive(true);
+		timers.advance(25);
+		controller.setActive(true);
+		timers.advance(25);
 
-		// 75ms elapsed since first arm, but never 50ms without a ping.
 		expect(controller.isActive).toBe(true);
-		expect(registerCalls).toHaveLength(1); // pings never re-register
+		expect(registerCalls).toHaveLength(1);
 
-		await wait(80);
+		timers.advance(idleMs);
 		expect(controller.isActive).toBe(false);
 	});
 
-	it('an explicit disarm cancels the pending idle timer (no double unregister later)', async () => {
+	it('an explicit disarm cancels the pending idle timer (no double unregister later)', () => {
+		const idleMs = 25;
 		const { api, unregisterCalls } = mockShortcutApi();
-		const controller = createHoverCopyController(() => {}, api, { idleMs: 25 });
+		const controller = createHoverCopyController(() => {}, api, { idleMs });
 
 		controller.setActive(true);
 		controller.setActive(false);
 		expect(unregisterCalls).toEqual(['C']);
 
-		await wait(60);
-		expect(unregisterCalls).toEqual(['C']); // idle timer did not fire a second unregister
+		timers.advance(idleMs + 35);
+		expect(unregisterCalls).toEqual(['C']);
 	});
 });
 
@@ -246,6 +256,17 @@ describe('hover-copy Late-Ping-Race gate (Iteration-5 re-review follow-up)', () 
 });
 
 describe('hover-copy post-disarm re-arm cooldown (mouseleave in full phase)', () => {
+	let timers: FakeTimers;
+
+	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
+	});
+
+	afterEach(() => {
+		timers.restore();
+	});
+
 	it('an in-flight ping landing right after an explicit disarm does not re-arm', () => {
 		const { api, registerCalls } = mockShortcutApi();
 		// canArm stays true — this models the `full`-phase mouseleave, where
@@ -263,14 +284,19 @@ describe('hover-copy post-disarm re-arm cooldown (mouseleave in full phase)', ()
 		expect(registerCalls).toHaveLength(1);
 	});
 
-	it('re-arms normally once the cooldown has elapsed (genuine re-hover)', async () => {
+	it('re-arms normally once the cooldown has elapsed (genuine re-hover)', () => {
+		const rearmCooldownMs = 25;
+		let t = 0;
 		const { api, registerCalls } = mockShortcutApi();
-		const controller = createHoverCopyController(() => {}, api, { rearmCooldownMs: 25 });
+		const controller = createHoverCopyController(() => {}, api, {
+			rearmCooldownMs,
+			now: () => t,
+		});
 
 		controller.setActive(true);
 		controller.setActive(false);
 
-		await wait(50);
+		t = rearmCooldownMs;
 
 		expect(controller.setActive(true)).toBe(true);
 		expect(controller.isActive).toBe(true);
@@ -278,19 +304,18 @@ describe('hover-copy post-disarm re-arm cooldown (mouseleave in full phase)', ()
 		controller.dispose();
 	});
 
-	it('an idle-timer disarm does NOT start the cooldown — the next ping re-arms immediately', async () => {
+	it('an idle-timer disarm does NOT start the cooldown — the next ping re-arms immediately', () => {
+		const idleMs = 25;
 		const { api, registerCalls } = mockShortcutApi();
 		const controller = createHoverCopyController(() => {}, api, {
-			idleMs: 25,
-			rearmCooldownMs: 10_000, // would block for 10s if it applied here
+			idleMs,
+			rearmCooldownMs: 10_000,
 		});
 
 		controller.setActive(true);
-		await wait(60); // idle disarm fires
+		timers.advance(idleMs);
 		expect(controller.isActive).toBe(false);
 
-		// A fresh ping after an idle disarm is genuine current activity and
-		// must re-arm without waiting out any cooldown.
 		expect(controller.setActive(true)).toBe(true);
 		expect(controller.isActive).toBe(true);
 		expect(registerCalls).toHaveLength(2);
@@ -364,20 +389,30 @@ describe('hover-copy cooldown clock (monotonic, review MAJOR non-monotonic coold
 });
 
 describe('hover-copy trigger resets the idle deadline (idle-UX follow-up)', () => {
-	it('a successful "C" trigger extends the idle deadline like an explicit ping', async () => {
+	let timers: FakeTimers;
+
+	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
+	});
+
+	afterEach(() => {
+		timers.restore();
+	});
+
+	it('a successful "C" trigger extends the idle deadline like an explicit ping', () => {
+		const idleMs = 50;
 		const { api, registerCalls, unregisterCalls } = mockShortcutApi();
-		const controller = createHoverCopyController(() => {}, api, { idleMs: 50 });
+		const controller = createHoverCopyController(() => {}, api, { idleMs });
 
 		controller.setActive(true);
-		await wait(25);
-		registerCalls[0]?.callback(); // simulate a real "C" press
-		await wait(35);
+		timers.advance(25);
+		registerCalls[0]?.callback();
+		timers.advance(35);
 
-		// 60ms elapsed since arm, but the trigger at 25ms reset the 50ms
-		// deadline, so the shortcut must still be armed.
 		expect(controller.isActive).toBe(true);
 
-		await wait(30);
+		timers.advance(30);
 		expect(controller.isActive).toBe(false);
 		expect(unregisterCalls).toEqual(['C']);
 	});
