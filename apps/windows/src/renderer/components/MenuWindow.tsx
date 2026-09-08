@@ -6,6 +6,7 @@ import { clipboardEventHasImage, pasteClipboardImage } from '../lib/clipboard-im
 import { acceleratorFromKeyboardEvent } from '../lib/hotkey-recorder';
 import { DEFAULT_PALETTE_HOTKEY, formatAcceleratorLabel } from '../../shared/accelerator';
 import { MAX_MESSAGE_CHARS, clampMessageText } from '@munkel/shared-wire/message-limits';
+import { formatSkippedImages } from '../../shared/send-result';
 import type { CircleState, GitHubLoginState, IdentityState, Member, PresenceStatus, UpdateState } from '../../shared/types';
 
 // Feedback window for the "Copy code" button's checkmark (Plan 12 "Menu:
@@ -368,18 +369,33 @@ export default function MenuWindow() {
 		const to = recipients[code] || undefined;
 		sendingCirclesRef.current.add(code);
 		try {
-			const result = images.length > 0
-				? await sendImages(code, images, text, to)
-				: await sendChat(code, text, to);
-			if (result.ok) {
-				setMessages((prev) => ({ ...prev, [code]: '' }));
-				setImageAttachments((prev) => ({ ...prev, [code]: [] }));
-				setSendErrors((prev) => ({ ...prev, [code]: '' }));
+			if (images.length > 0) {
+				const result = await sendImages(code, images, text, to);
+				if (result.ok) {
+					setMessages((prev) => ({ ...prev, [code]: '' }));
+					setImageAttachments((prev) => ({ ...prev, [code]: [] }));
+					setSendErrors((prev) => ({
+						...prev,
+						[code]: result.skipped?.length ? formatSkippedImages(result.skipped) : '',
+					}));
+				} else {
+					setSendErrors((prev) => ({
+						...prev,
+						[code]: result.error ?? 'Circle offline — message not sent.',
+					}));
+				}
 			} else {
-				setSendErrors((prev) => ({
-					...prev,
-					[code]: result.error ?? 'Circle offline — message not sent.',
-				}));
+				const result = await sendChat(code, text, to);
+				if (result.ok) {
+					setMessages((prev) => ({ ...prev, [code]: '' }));
+					setImageAttachments((prev) => ({ ...prev, [code]: [] }));
+					setSendErrors((prev) => ({ ...prev, [code]: '' }));
+				} else {
+					setSendErrors((prev) => ({
+						...prev,
+						[code]: result.error ?? 'Circle offline — message not sent.',
+					}));
+				}
 			}
 		} finally {
 			sendingCirclesRef.current.delete(code);

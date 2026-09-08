@@ -13,6 +13,7 @@ import type {
 	IdentityState,
 	Member,
 	PresenceStatus,
+	SendResult,
 	StateUpdate,
 	UpdateState,
 } from '../../shared/types';
@@ -34,7 +35,7 @@ interface AppStore {
 	joinCircle: (code: string, relayUrl?: string) => Promise<void>;
 	leaveCircle: (code: string) => Promise<void>;
 	sendChat: (code: string, text: string, to?: string) => Promise<{ ok: boolean; error?: string }>;
-	sendImages: (code: string, paths: string[], caption: string, to?: string) => Promise<{ ok: boolean; error?: string }>;
+	sendImages: (code: string, paths: string[], caption: string, to?: string) => Promise<SendResult>;
 	selectImages: () => Promise<string[] | undefined>;
 	updateProfile: (displayName: string, avatar?: string) => Promise<void>;
 	setPresenceStatus: (status: PresenceStatus) => Promise<void>;

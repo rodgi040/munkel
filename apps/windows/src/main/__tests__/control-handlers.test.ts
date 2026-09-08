@@ -358,16 +358,27 @@ describe('control-handlers', () => {
 			expect(response.error).toMatch(/Image sends need a circle/);
 		});
 
-		it('rejects a missing image file', async () => {
-			const state = fakeState({});
+		it('defers missing image files to sendImages', async () => {
+			const missingPath = join(tempDir, 'does-not-exist.png');
+			const state = fakeState({
+				sendImages: async (_group, paths) => {
+					expect(paths).toEqual([missingPath]);
+					return {
+						ok: false,
+						error: 'Could not send any images',
+						skipped: [{ path: missingPath, reason: `File not found: ${missingPath}` }],
+					};
+				},
+			});
 			const response = await call(state, {
 				action: 'send',
 				group: 'blue-table-42',
 				text: 'caption',
-				imagePaths: [join(tempDir, 'does-not-exist.png')],
+				imagePaths: [missingPath],
 			});
 			expect(response.ok).toBe(false);
-			expect(response.error).toMatch(/File not found/);
+			expect(response.error).toBe('Could not send any images');
+			expect(response.skipped?.[0]?.path).toBe(missingPath);
 		});
 
 		it('rejects unsupported image formats', async () => {
@@ -384,9 +395,23 @@ describe('control-handlers', () => {
 			expect(response.error).toContain('notes.txt');
 		});
 
-		it('rejects image files larger than the maximum size', async () => {
+		it('defers oversized image files to sendImages using MAX_SOURCE_BYTES', async () => {
 			const bigPath = await makeFile('huge.png', 51 * 1024 * 1024);
-			const state = fakeState({});
+			const state = fakeState({
+				sendImages: async (_group, paths) => {
+					expect(paths).toEqual([bigPath]);
+					return {
+						ok: false,
+						error: 'Could not send any images',
+						skipped: [
+							{
+								path: bigPath,
+								reason: `File too large: ${bigPath} (51.0 MiB; max 32.0 MiB)`,
+							},
+						],
+					};
+				},
+			});
 			const response = await call(state, {
 				action: 'send',
 				group: 'blue-table-42',
@@ -394,8 +419,31 @@ describe('control-handlers', () => {
 				imagePaths: [bigPath],
 			});
 			expect(response.ok).toBe(false);
-			expect(response.error).toMatch(/File too large/);
-			expect(response.error).toContain('huge.png');
+			expect(response.error).toBe('Could not send any images');
+			expect(response.skipped?.[0]?.path).toContain('huge.png');
+			expect(response.warning).toMatch(/Skipped 1 image/);
+		});
+
+		it('surfaces partial album success with named skip reasons', async () => {
+			const goodPath = await makeFile('good.png');
+			const badPath = await makeFile('bad.png');
+			const state = fakeState({
+				sendImages: async () => ({
+					ok: true,
+					skipped: [{ path: badPath, reason: `Could not encode ${badPath}` }],
+				}),
+			});
+			const response = await call(state, {
+				action: 'send',
+				group: 'blue-table-42',
+				text: 'caption',
+				imagePaths: [goodPath, badPath],
+			});
+			expect(response).toEqual({
+				ok: true,
+				warning: `Skipped 1 image:\n${badPath}: Could not encode ${badPath}`,
+				skipped: [{ path: badPath, reason: `Could not encode ${badPath}` }],
+			});
 		});
 
 		it('rejects more than 8 images', async () => {
