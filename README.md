@@ -6,7 +6,12 @@
 
 **Alternative (portable):** download the Windows zip artifact, extract it, and run `Munkel.exe` directly.
 
-Fork beta builds are currently unsigned. Windows SmartScreen or Defender may show an "Unknown publisher" warning. If that happens, click `More info` and then `Run anyway`.
+Fork beta builds are currently unsigned and do not verify publisher identity
+on update — see [SECURITY.md](SECURITY.md). Windows SmartScreen or Defender
+may show an "Unknown publisher" warning on first install; click `More info`
+and then `Run anyway`. Auto-updates still check integrity against the GitHub
+Releases feed, but they do not prove the installer came from a signed
+publisher ([#60](https://github.com/rodgi040/munkel/issues/60)).
 
 [![CI](https://github.com/limehq/munkel/actions/workflows/ci.yml/badge.svg)](https://github.com/limehq/munkel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/limehq/munkel/actions/workflows/codeql.yml/badge.svg)](https://github.com/limehq/munkel/actions/workflows/codeql.yml)
