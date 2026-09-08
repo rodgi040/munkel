@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach, jest } from 'bun:test';
 import { EventEmitter } from 'node:events';
-import { initUpdateService, type UpdateSend } from '../update-service';
+import { initUpdateService, type ScheduleFn, type UpdateSend } from '../update-service';
 import type { UpdateState } from '../../shared/types';
+import { FakeTimers } from '../../test-support/fake-timers';
 
 class MockAppUpdater extends EventEmitter {
 	logger: unknown = null;
@@ -43,6 +44,23 @@ function createSend() {
 	const states: UpdateState[] = [];
 	const send: UpdateSend = (state) => states.push(state);
 	return { send, states };
+}
+
+function createScheduledTimers() {
+	const scheduled: Array<{ fn: () => void; ms: number; id: number }> = [];
+	let nextId = 1;
+	const schedule: ScheduleFn = (fn, ms) => {
+		const id = nextId++;
+		scheduled.push({ fn, ms, id });
+		return id;
+	};
+	const clearSchedule = (id: unknown) => {
+		const index = scheduled.findIndex((entry) => entry.id === id);
+		if (index >= 0) {
+			scheduled.splice(index, 1);
+		}
+	};
+	return { scheduled, schedule, clearSchedule };
 }
 
 describe('initUpdateService', () => {
@@ -289,21 +307,137 @@ describe('UpdateService state transitions', () => {
 
 	it('ignores cancel while an install is already in flight', () => {
 		const updater = new MockAppUpdater();
-		// quitAndInstall is a no-op here, so installing stays true.
 		const sendCapture = createSend();
+		const timers = createScheduledTimers();
 		const localService = initUpdateService(sendCapture.send, {
 			autoUpdater: updater as never,
 			isDev: false,
+			schedule: timers.schedule,
+			clearSchedule: timers.clearSchedule,
 		});
 
 		updater.emit('update-downloaded', { version: '0.2.0' });
 		localService.install();
 		localService.confirmInstall();
 		expect(sendCapture.states.at(-1)).toEqual({ phase: 'confirm', version: '0.2.0' });
+		expect(timers.scheduled).toHaveLength(1);
+		expect(timers.scheduled[0]!.ms).toBe(8_000);
 
 		localService.cancelInstall();
 		expect(sendCapture.states.at(-1)).toEqual({ phase: 'confirm', version: '0.2.0' });
 
+		timers.scheduled[0]!.fn();
+		expect(sendCapture.states.at(-1)).toEqual({
+			phase: 'error',
+			error: 'Update install failed: the installer did not launch. Try confirming again or install the update manually.',
+		});
+
+		localService.dispose();
+	});
+
+	it('recovers the update flow after quit-and-install returns without quitting', async () => {
+		const mock = createMockUpdater();
+		const sendCapture = createSend();
+		const timers = createScheduledTimers();
+		const localService = initUpdateService(sendCapture.send, {
+			autoUpdater: mock.updater as never,
+			isDev: false,
+			autoCheckEnabled: false,
+			schedule: timers.schedule,
+			clearSchedule: timers.clearSchedule,
+		});
+
+		mock.updater.emit('update-downloaded', { version: '0.2.0' });
+		localService.install();
+		localService.confirmInstall();
+		expect(localService.cancelInstall()).toEqual({ ok: false });
+
+		timers.scheduled[0]!.fn();
+		expect(sendCapture.states.at(-1)?.phase).toBe('error');
+		expect(sendCapture.states.at(-1)?.error).toContain('installer did not launch');
+
+		expect(localService.check()).toEqual({ ok: true });
+		await new Promise((resolve) => setImmediate(resolve));
+		mock.updater.emit('update-downloaded', { version: '0.2.1' });
+		expect(localService.install()).toEqual({ ok: true });
+		expect(sendCapture.states.at(-1)).toEqual({ phase: 'confirm', version: '0.2.1' });
+		expect(localService.confirmInstall()).toEqual({ ok: true });
+		expect(mock.installSpy.calls).toBe(2);
+
+		localService.dispose();
+	});
+
+	it('does not arm quit detection when quitAndInstall throws synchronously', () => {
+		const updater = new MockAppUpdater();
+		updater.quitAndInstall = () => {
+			throw new Error('installer launch failed');
+		};
+		const sendCapture = createSend();
+		const timers = createScheduledTimers();
+		const localService = initUpdateService(sendCapture.send, {
+			autoUpdater: updater as never,
+			isDev: false,
+			schedule: timers.schedule,
+			clearSchedule: timers.clearSchedule,
+		});
+
+		updater.emit('update-downloaded', { version: '0.2.0' });
+		localService.install();
+		localService.confirmInstall();
+
+		expect(timers.scheduled).toHaveLength(0);
+		expect(sendCapture.states.at(-1)).toEqual({ phase: 'error', error: 'Update check failed.' });
+
+		localService.dispose();
+	});
+
+	it('dispose cancels a pending quit detection', () => {
+		const updater = new MockAppUpdater();
+		const sendCapture = createSend();
+		const timers = createScheduledTimers();
+		const localService = initUpdateService(sendCapture.send, {
+			autoUpdater: updater as never,
+			isDev: false,
+			schedule: timers.schedule,
+			clearSchedule: timers.clearSchedule,
+		});
+
+		updater.emit('update-downloaded', { version: '0.2.0' });
+		localService.install();
+		localService.confirmInstall();
+		expect(timers.scheduled).toHaveLength(1);
+		const pendingDetection = timers.scheduled[0]!.fn;
+
+		localService.dispose();
+		expect(timers.scheduled).toHaveLength(0);
+
+		pendingDetection();
+		expect(sendCapture.states.at(-1)).toEqual({ phase: 'confirm', version: '0.2.0' });
+	});
+
+	it('drives quit detection with injected fake timers', () => {
+		const updater = new MockAppUpdater();
+		const sendCapture = createSend();
+		const fakeTimers = new FakeTimers();
+		fakeTimers.install();
+		const localService = initUpdateService(sendCapture.send, {
+			autoUpdater: updater as never,
+			isDev: false,
+			schedule: (fn, ms) => setTimeout(fn, ms),
+			clearSchedule: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+		});
+
+		updater.emit('update-downloaded', { version: '0.2.0' });
+		localService.install();
+		localService.confirmInstall();
+
+		fakeTimers.advance(7_999);
+		expect(sendCapture.states.at(-1)).toEqual({ phase: 'confirm', version: '0.2.0' });
+
+		fakeTimers.advance(1);
+		expect(sendCapture.states.at(-1)?.phase).toBe('error');
+
+		fakeTimers.restore();
 		localService.dispose();
 	});
 

@@ -5,6 +5,9 @@ export type { UpdatePhase, UpdateState } from '../shared/types';
 
 export type UpdateSend = (state: UpdateState) => void;
 
+export type ScheduleFn = (fn: () => void, ms: number) => unknown;
+export type ClearScheduleFn = (id: unknown) => void;
+
 export interface UpdateService {
 	check: () => { ok: boolean };
 	install: () => { ok: boolean };
@@ -18,7 +21,8 @@ export interface UpdateService {
 	setAutoCheckEnabled: (enabled: boolean) => void;
 }
 
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const QUIT_DETECTION_MS = 8_000;
 
 function isSignatureError(error: unknown): boolean {
 	if (typeof error !== 'object' || error === null) return false;
@@ -48,6 +52,22 @@ function userMessageForError(error: unknown): string {
 	return 'Update check failed.';
 }
 
+function quitInstallFailureMessage(): string {
+	return 'Update install failed: the installer did not launch. Try confirming again or install the update manually.';
+}
+
+function defaultSchedule(fn: () => void, ms: number): unknown {
+	const id = setTimeout(fn, ms);
+	if (id && typeof (id as NodeJS.Timeout).unref === 'function') {
+		(id as NodeJS.Timeout).unref();
+	}
+	return id;
+}
+
+function defaultClearSchedule(id: unknown): void {
+	clearTimeout(id as Parameters<typeof clearTimeout>[0]);
+}
+
 class UpdateServiceImpl implements UpdateService {
 	private phase: UpdatePhase = 'idle';
 	private error?: string;
@@ -55,16 +75,29 @@ class UpdateServiceImpl implements UpdateService {
 	private intervalId: ReturnType<typeof setInterval> | null = null;
 	private checking = false;
 	private installing = false;
+	private quitDetectionId: unknown = null;
+	private disposed = false;
 	private autoCheckEnabled: boolean;
 	private readonly send: UpdateSend;
 	private readonly autoUpdater: AppUpdater;
 	private readonly isDev: boolean;
+	private readonly schedule: ScheduleFn;
+	private readonly clearSchedule: ClearScheduleFn;
 
-	constructor(send: UpdateSend, autoUpdater: AppUpdater, isDev: boolean, autoCheckEnabled: boolean) {
+	constructor(
+		send: UpdateSend,
+		autoUpdater: AppUpdater,
+		isDev: boolean,
+		autoCheckEnabled: boolean,
+		schedule: ScheduleFn,
+		clearSchedule: ClearScheduleFn,
+	) {
 		this.send = send;
 		this.autoUpdater = autoUpdater;
 		this.isDev = isDev;
 		this.autoCheckEnabled = autoCheckEnabled;
+		this.schedule = schedule;
+		this.clearSchedule = clearSchedule;
 
 		this.autoUpdater.logger = null;
 		this.autoUpdater.autoDownload = true;
@@ -137,6 +170,7 @@ class UpdateServiceImpl implements UpdateService {
 			this.setPhase('error', { error: userMessageForError(error) });
 			return { ok: false };
 		}
+		this.armQuitDetection();
 		return { ok: true };
 	}
 
@@ -168,7 +202,28 @@ class UpdateServiceImpl implements UpdateService {
 	}
 
 	dispose(): void {
+		this.disposed = true;
+		this.clearQuitDetection();
 		this.stopPeriodicCheck();
+	}
+
+	private armQuitDetection(): void {
+		this.clearQuitDetection();
+		this.quitDetectionId = this.schedule(() => this.onQuitDetectionTimeout(), QUIT_DETECTION_MS);
+	}
+
+	private clearQuitDetection(): void {
+		if (this.quitDetectionId !== null) {
+			this.clearSchedule(this.quitDetectionId);
+			this.quitDetectionId = null;
+		}
+	}
+
+	private onQuitDetectionTimeout(): void {
+		this.quitDetectionId = null;
+		if (this.disposed || !this.installing) return;
+		this.installing = false;
+		this.setPhase('error', { error: quitInstallFailureMessage() });
 	}
 
 	private setPhase(phase: UpdatePhase, extras: { version?: string; progress?: number; error?: string } = {}): void {
@@ -214,7 +269,13 @@ function defaultIsDev(): boolean {
 
 export function initUpdateService(
 	send: UpdateSend,
-	options: { autoUpdater?: AppUpdater; isDev?: boolean; autoCheckEnabled?: boolean } = {},
+	options: {
+		autoUpdater?: AppUpdater;
+		isDev?: boolean;
+		autoCheckEnabled?: boolean;
+		schedule?: ScheduleFn;
+		clearSchedule?: ClearScheduleFn;
+	} = {},
 ): UpdateService {
 	let autoUpdater = options.autoUpdater;
 	if (!autoUpdater) {
@@ -232,7 +293,9 @@ export function initUpdateService(
 	// Defaults to `true` — today's unconditional-check behavior — for any
 	// caller that doesn't pass a persisted preference (e.g. existing tests).
 	const autoCheckEnabled = options.autoCheckEnabled ?? true;
-	const service = new UpdateServiceImpl(send, autoUpdater, isDev, autoCheckEnabled);
+	const schedule = options.schedule ?? defaultSchedule;
+	const clearSchedule = options.clearSchedule ?? defaultClearSchedule;
+	const service = new UpdateServiceImpl(send, autoUpdater, isDev, autoCheckEnabled, schedule, clearSchedule);
 
 	if (!isDev && autoCheckEnabled) {
 		service.check();
