@@ -40,10 +40,45 @@ xcuserdata/
 
 # Agent / GSD working files (private to user-agent collaboration)
 /AGENTS.md
-/Roadmap.md
 /State.md
+/HANDOFF.md
+/NOTE.md
 /handoff.js
 /debug.md
+
+# Flightplan payload — local agent tooling, not part of the product.
+# Product files that share a Flightplan name stay tracked: CLAUDE.md,
+# ROADMAP.md, skills/munkel/, .claude/settings.json,
+# .claude/skills/github-issue-workflow/.
+# .flightplan-root stays tracked (plan_root must survive a fresh clone).
+.flightplan-version
+.flightplan-mode
+.flightplan-manifest.json
+.flightplan-last-update.json
+.flightplan-backup/
+_flightplan-backup-*/
+*.flightplan.md
+*.flightplan-merged.md
+*.flightplan-backup.md
+.agents/
+.codex/
+/commands/
+flightplan/
+/Planning/
+/STEERING.md
+/PRD.md
+/BLOCKER.md
+/REPORT.md
+/TECHSTACK.md
+/FLIGHTPLAN-TOOLS.md
+/CODEBASE-MAP.md
+/skills/fp-*
+/skills/research/
+/.claude/skills/fp-*
+/.claude/skills/research/
+/.claude/agents/
+/.claude/commands/
+/techstack-docs/
 
 # Planning artifacts
 .planning/
@@ -66,3 +101,10 @@ graphify-out/*
 
 # Vite writes a timestamped temp config next to the real one on each dev run
 *.timestamp-*.mjs
+
+# Flightplan template lines merged by /fp-update (graphify-out/ omitted — it would
+# undo the un-ignore of graph.json / GRAPH_REPORT.md / wiki/ above).
+*.env
+Thumbs.db
+.claude/settings.local.json
+*.tar.gz
