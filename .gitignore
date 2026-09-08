@@ -40,10 +40,40 @@ xcuserdata/
 
 # Agent / GSD working files (private to user-agent collaboration)
 /AGENTS.md
-/Roadmap.md
 /State.md
+/HANDOFF.md
+/NOTE.md
 /handoff.js
 /debug.md
+
+# Flightplan payload — local agent tooling, not part of the product.
+# Product files that share a Flightplan name stay tracked: CLAUDE.md,
+# ROADMAP.md, skills/munkel/, .claude/settings.json,
+# .claude/skills/github-issue-workflow/.
+.flightplan-version
+.flightplan-mode
+.flightplan-root
+.flightplan-manifest.json
+.flightplan-last-update.json
+.flightplan-backup/
+_flightplan-backup-*/
+*.flightplan.md
+*.flightplan-merged.md
+*.flightplan-backup.md
+.agents/
+.codex/
+/commands/
+/Planning/
+/STEERING.md
+/PRD.md
+/BLOCKER.md
+/REPORT.md
+/TECHSTACK.md
+/FLIGHTPLAN-TOOLS.md
+/CODEBASE-MAP.md
+/skills/fp-*
+/.claude/skills/fp-*
+/techstack-docs/
 
 # Planning artifacts
 .planning/
