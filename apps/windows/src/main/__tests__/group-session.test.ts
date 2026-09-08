@@ -845,7 +845,7 @@ describe('GroupSession', () => {
 		session.disconnect();
 	});
 
-	test('sendImages processes multiple paths and reports encoding failures', async () => {
+	test('sendImages drops invalid images and fails only when none survive', async () => {
 		const wss = startServer();
 		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
 		const code = 'parallel-album';
@@ -875,7 +875,11 @@ describe('GroupSession', () => {
 
 		const result = await session.sendImages([path1, path2], 'album caption');
 		expect(result.ok).toBe(false);
-		expect(result.error).toEqual(expect.any(String));
+		if (!result.ok) {
+			expect(result.error).toBe('Could not send any images');
+			expect(result.skipped).toHaveLength(2);
+			expect(result.skipped![0]!.reason).toContain('Could not encode');
+		}
 
 		session.disconnect();
 	});

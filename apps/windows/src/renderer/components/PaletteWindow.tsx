@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '../store/app-store';
 import { Avatar } from './Avatar';
 import { clipboardEventHasImage, pasteClipboardImage } from '../lib/clipboard-image';
+import { formatSkippedImages } from '../../shared/send-result';
 
 // Mirrors `MAX_IMAGES_PER_MESSAGE` in `core/image-codec.ts` — not imported
 // directly to avoid pulling that module's Node-oriented deps (`image-size`,
@@ -146,18 +147,27 @@ export default function PaletteWindow() {
 		setError(null);
 		try {
 			const to = target.isEveryone ? undefined : target.memberId;
-			let result: { ok: boolean; error?: string };
 			if (imagePaths.length > 0) {
-				result = await sendImages(target.circleCode, imagePaths, text, to);
+				const result = await sendImages(target.circleCode, imagePaths, text, to);
+				if (!result.ok) {
+					setError(result.error ?? 'Circle offline — message not sent.');
+					return;
+				}
+				setMessage('');
+				setImagePaths([]);
+				if (result.skipped?.length) {
+					setError(formatSkippedImages(result.skipped));
+					return;
+				}
 			} else {
-				result = await sendChat(target.circleCode, text, to);
+				const result = await sendChat(target.circleCode, text, to);
+				if (!result.ok) {
+					setError(result.error ?? 'Circle offline — message not sent.');
+					return;
+				}
+				setMessage('');
+				setImagePaths([]);
 			}
-			if (!result.ok) {
-				setError(result.error ?? 'Circle offline — message not sent.');
-				return; // keep the text / images so the user can retry
-			}
-			setMessage('');
-			setImagePaths([]);
 			setTarget(null);
 			setQuery('');
 			setSelectedIndex(0);

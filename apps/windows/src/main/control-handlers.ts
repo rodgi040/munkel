@@ -9,9 +9,9 @@
  * and the same error semantics for ambiguous recipients.
  */
 
-import { stat } from 'node:fs/promises';
 import { normalizeCircleCode, MAX_IMAGES_PER_MESSAGE } from '../core';
 import type { CircleState } from '../shared/types';
+import { formatSkippedImages } from '../shared/send-result';
 import { memberLabel } from '../shared/member-label';
 import type { ControlGroupInfo, ControlRequest, ControlResponse } from '@munkel/shared-wire/control';
 import type { SendResult } from './group-session';
@@ -28,14 +28,7 @@ export interface ControlAppState {
 }
 
 const BROADCAST_ALIASES = new Set(['all', '*']);
-const MAX_IMAGE_FILE_SIZE = 50 * 1024 * 1024; // 50 MiB
 const SUPPORTED_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif']);
-
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
 
 function imageExtension(path: string): string {
 	const match = path.match(/\.([^.]+)$/);
@@ -112,31 +105,6 @@ export function buildControlHandler(
 					}
 
 					for (const path of request.imagePaths) {
-						let size: number;
-						try {
-							const fileStat = await stat(path);
-							if (!fileStat.isFile()) {
-								return { ok: false, error: `Not a file: ${path}` };
-							}
-							size = fileStat.size;
-						} catch (err) {
-							const code = (err as { code?: string }).code;
-							if (code === 'ENOENT') {
-								return { ok: false, error: `File not found: ${path}` };
-							}
-							return {
-								ok: false,
-								error: `Could not access ${path}: ${err instanceof Error ? err.message : String(err)}`,
-							};
-						}
-
-						if (size > MAX_IMAGE_FILE_SIZE) {
-							return {
-								ok: false,
-								error: `File too large: ${path} (${formatBytes(size)}; max ${formatBytes(MAX_IMAGE_FILE_SIZE)})`,
-							};
-						}
-
 						const ext = imageExtension(path);
 						if (!SUPPORTED_IMAGE_EXTENSIONS.has(ext)) {
 							return {
@@ -152,9 +120,23 @@ export function buildControlHandler(
 						request.text ?? '',
 						request.to,
 					);
-					return sent.ok
-						? { ok: true }
-						: { ok: false, error: sent.error ?? 'Image send failed.' };
+					if (sent.ok) {
+						if (sent.skipped?.length) {
+							return {
+								ok: true,
+								warning: formatSkippedImages(sent.skipped),
+								skipped: sent.skipped,
+							};
+						}
+						return { ok: true };
+					}
+					return {
+						ok: false,
+						error: sent.error ?? 'Image send failed.',
+						...(sent.skipped?.length
+							? { warning: formatSkippedImages(sent.skipped), skipped: sent.skipped }
+							: {}),
+					};
 				}
 				const text = request.text ?? '';
 				if (text.length === 0) {

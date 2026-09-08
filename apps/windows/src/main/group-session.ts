@@ -12,27 +12,20 @@ import {
 	assertPayloadFits,
 	PayloadError,
 	normalizeCircleCode,
-	imageCodec,
-	perThumbBudget,
 	MAX_IMAGES_PER_MESSAGE,
-	uploadBlob,
 	downloadBlob,
-	generateBlobKey,
 } from '../core';
 import type { ImageItem } from '../core';
-import { readFile } from 'node:fs/promises';
 import { RelayClient } from './relay-client';
+import { prepareImageAlbum } from './image-album-send';
+import type { SendResult } from '../shared/send-result';
 import { getCircleColor } from '../shared/group-color';
 import { memberLabel } from '../shared/member-label';
 import { clampMessageText } from '@munkel/shared-wire/message-limits';
 import type { CircleState, IncomingImage, Member, NotchMessage, PresenceStatus } from '../shared/types';
 import type { ChatPayload, ClientMessage, PresencePayload, ProfilePayload, ServerMessage } from '../core';
 
-/**
- * Result of a GroupSession send. Surfaced all the way to the renderer
- * so the inline-error UI can distinguish "too long" from "offline".
- */
-export type SendResult = { ok: true } | { ok: false; error: string };
+export type { SendResult, SkippedImage } from '../shared/send-result';
 
 export interface GroupSessionCallbacks {
 	onStateChange(state: CircleState): void;
@@ -193,63 +186,34 @@ export class GroupSession {
 			imagePaths = imagePaths.slice(0, MAX_IMAGES_PER_MESSAGE);
 		}
 
-		// Pre-clamp so per-thumb budget accounts for the final album size.
-		const perThumb = perThumbBudget(imagePaths.length);
-
 		try {
-			const results = await Promise.all(
-				imagePaths.map(async (path, index) => {
-					let source: Uint8Array;
-					try {
-						source = await readFile(path);
-					} catch (err) {
-						throw new Error(`Could not read ${path}: ${err instanceof Error ? err.message : String(err)}`);
-					}
-
-					const full = await imageCodec.prepareFull(source);
-					if (!full) {
-						throw new Error(`Could not encode ${path}`);
-					}
-
-					const sealedFull = await sealRaw(full.data, this.messageKey);
-					const r2Key = generateBlobKey();
-					const upload = await uploadBlob(this.relayUrl, this.groupId, r2Key, sealedFull);
-					if (!upload.ok) {
-						throw new Error(upload.error ?? 'Blob upload failed');
-					}
-
-					const thumb = await imageCodec.makeThumbnail(source, perThumb);
-					if (!thumb) {
-						throw new Error(`Could not thumbnail ${path}`);
-					}
-
-					return {
-						index,
-						item: {
-							r2Key,
-							mime: 'image/avif',
-							width: full.width,
-							height: full.height,
-							byteLen: sealedFull.byteLength,
-							thumb: Buffer.from(thumb.data).toString('base64'),
-						} satisfies ImageItem,
-					};
-				}),
+			const { items, skipped } = await prepareImageAlbum(
+				imagePaths,
+				this.messageKey,
+				this.relayUrl,
+				this.groupId,
 			);
 
-			const items = results
-				.sort((a, b) => a.index - b.index)
-				.map((r) => r.item);
+			if (items.length === 0) {
+				return {
+					ok: false,
+					error: 'Could not send any images',
+					skipped,
+				};
+			}
+
 			const result = await this.sendPayload(encodeImage(items, caption), to);
-			if (result.ok && to === undefined && this.callbacks.shouldEchoBroadcasts?.()) {
+			if (!result.ok) {
+				return skipped.length > 0 ? { ...result, skipped } : result;
+			}
+
+			if (to === undefined && this.callbacks.shouldEchoBroadcasts?.()) {
 				const images = buildEchoImages(items);
-				// Same fallback caption text as the incoming-image onNotch branch in
-				// handleFrame below, so the echoed album reads identically to how a
-				// peer would see it.
 				const text = caption || `Sent ${images.length} image${images.length === 1 ? '' : 's'}`;
 				this.callbacks.onNotch(this.buildOwnNotchMessage(text, images));
 			}
-			return result;
+
+			return skipped.length > 0 ? { ok: true, skipped } : { ok: true };
 		} catch (err) {
 			const message = err instanceof Error ? err.message : 'Could not send images';
 			return { ok: false, error: message };

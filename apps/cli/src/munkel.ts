@@ -402,7 +402,14 @@ if (!response.ok) {
   for (const group of response.groups ?? []) {
     console.error(`  ${formatGroup(group)}`)
   }
+  if (response.warning) {
+    console.error(response.warning)
+  }
   fail(response.error ?? "Unknown error")
+}
+
+if (response.warning) {
+  console.error(response.warning)
 }
 
 if (jsonOutput) {

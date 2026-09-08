@@ -1,6 +1,7 @@
 import type { PresenceStatus } from '@munkel/shared-wire/payload';
+import type { SendResult } from './send-result';
 
-export type { PresenceStatus };
+export type { PresenceStatus, SendResult };
 
 export type WindowType = 'menu' | 'notch' | 'palette';
 
@@ -97,7 +98,7 @@ export interface IpcApi {
 	joinCircle: (code: string, relayUrl?: string) => Promise<void>;
 	leaveCircle: (code: string) => Promise<void>;
 	sendChat: (code: string, text: string, to?: string) => Promise<{ ok: boolean; error?: string }>;
-	sendImages: (code: string, paths: string[], caption: string, to?: string) => Promise<{ ok: boolean; error?: string }>;
+	sendImages: (code: string, paths: string[], caption: string, to?: string) => Promise<SendResult>;
 	updateProfile: (displayName: string, avatar?: string) => Promise<void>;
 	setPresenceStatus: (status: PresenceStatus) => Promise<void>;
 	setRelayUrl: (code: string, relayUrl: string) => Promise<void>;

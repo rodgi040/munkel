@@ -32,6 +32,8 @@ export interface ControlGroupInfo {
 export interface ControlResponse {
   ok: boolean;
   error?: string;
+  warning?: string;
+  skipped?: Array<{ path: string; reason: string }>;
   groups?: ControlGroupInfo[];
 }
 
