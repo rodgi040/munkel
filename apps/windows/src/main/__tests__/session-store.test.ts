@@ -137,10 +137,10 @@ describe('AppState.loadFullImage (Plan 14 task 2)', () => {
 	let joinedCode: string | null = null;
 	let appStateToClean: AppState | null = null;
 
-	afterEach(() => {
+	afterEach(async () => {
 		globalThis.fetch = originalFetch;
 		if (joinedCode && appStateToClean) {
-			appStateToClean.leaveCircle(joinedCode);
+			await appStateToClean.leaveCircle(joinedCode);
 		}
 		joinedCode = null;
 		appStateToClean = null;
@@ -197,7 +197,7 @@ describe('AppState.loadFullImage (Plan 14 task 2)', () => {
 		const code = 'preview-delegate-left';
 
 		await appState.joinCircle(code, 'ws://relay.invalid/ws');
-		appState.leaveCircle(code);
+		await appState.leaveCircle(code);
 
 		expect(await appState.loadFullImage(code, 'any-key')).toBeNull();
 	});
