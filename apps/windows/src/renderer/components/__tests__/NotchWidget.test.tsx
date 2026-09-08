@@ -6,6 +6,12 @@ import NotchWidget, { RESIZE_REPORT_DEBOUNCE_MS } from '../NotchWidget';
 import type { NotchMessage } from '../../../shared/types';
 import { PREVIEW_DEBOUNCE_MS } from '../../lib/image-preview-state';
 import { FakeTimers } from '../../../test-support/fake-timers';
+import { NOTCH_HISTORY_MS } from '../../lib/notch-phase';
+import {
+	clearFullImageCache,
+	fullImageCacheHas,
+	setFullImageCacheEntry,
+} from '../../lib/full-image-cache';
 
 // Minimal electronAPI surface NotchWidget (and the useNotchLifecycle hook it
 // drives) touches. Kept separate from MenuWindow's mock so this file states
@@ -2291,6 +2297,137 @@ describe('NotchWidget image preview Escape close', () => {
 
 		expect(findLightboxOverlay(root)).toBeUndefined();
 		expect(previewActiveCalls).toContain(false);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+});
+
+describe('NotchWidget renderer memory (#90)', () => {
+	let electronApi: ReturnType<typeof createMockElectronApi>;
+	let originalResizeObserver: unknown;
+	let timers: FakeTimers;
+
+	function makeMessage(overrides: Partial<NotchMessage> = {}): NotchMessage {
+		return {
+			sender: 'Alice',
+			text: 'Hello from Alice',
+			isDirect: false,
+			group: 'test-circle',
+			groupColor: '#3b82f6',
+			receivedAt: new Date(Date.now()).toISOString(),
+			images: [{ id: 'img-expire', width: 100, height: 100, thumb: 'AAAA', mime: 'image/avif' }],
+			...overrides,
+		};
+	}
+
+	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
+		clearFullImageCache();
+		electronApi = createMockElectronApi();
+		(globalThis as unknown as {
+			window: {
+				electronAPI: typeof electronApi;
+				addEventListener: () => void;
+				removeEventListener: () => void;
+			};
+		}).window = {
+			electronAPI: electronApi,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		};
+		originalResizeObserver = (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+		delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+	});
+
+	afterEach(() => {
+		timers.restore();
+		clearFullImageCache();
+		delete (globalThis as unknown as { window?: unknown }).window;
+		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
+	});
+
+	async function renderWidget() {
+		let root: ReturnType<typeof create>;
+		await act(async () => {
+			root = create(
+				<AppProvider>
+					<NotchWidget />
+				</AppProvider>,
+			);
+			await Promise.resolve();
+		});
+		return root!;
+	}
+
+	function findLightboxOverlay(root: ReturnType<typeof create>) {
+		return root.root.findAll((node) => node.props.className === 'image-lightbox-overlay')[0];
+	}
+
+	it('prunes fullImageCache when history drops an image id', async () => {
+		const root = await renderWidget();
+
+		await act(async () => {
+			electronApi.simulateNotchMessage(
+				makeMessage({
+					text: 'expire message',
+					receivedAt: new Date(Date.now() - NOTCH_HISTORY_MS + 300).toISOString(),
+				}),
+			);
+		});
+		setFullImageCacheEntry('img-expire', { data: 'cached-bytes', mime: 'image/avif' });
+		expect(fullImageCacheHas('img-expire')).toBe(true);
+
+		await act(async () => {
+			electronApi.simulateNotchMessage(makeMessage({ text: 'keep message', images: [] }));
+		});
+
+		await act(async () => {
+			timers.advance(1_000);
+		});
+
+		expect(fullImageCacheHas('img-expire')).toBe(false);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+
+	it('closes the lightbox when the previewed image is pruned from history', async () => {
+		electronApi.fetchFullImage = () =>
+			Promise.resolve({ ok: true as const, data: 'full-bytes', mime: 'image/avif' });
+
+		const root = await renderWidget();
+
+		await act(async () => {
+			electronApi.simulateNotchMessage(
+				makeMessage({
+					text: 'expire message',
+					receivedAt: new Date(Date.now() - NOTCH_HISTORY_MS + 300).toISOString(),
+				}),
+			);
+		});
+
+		const thumb = root.root.findByProps({ className: 'image-preview-thumb' });
+		await act(async () => {
+			thumb.props.onClick({ stopPropagation: () => {} });
+			await Promise.resolve();
+		});
+		expect(findLightboxOverlay(root)).toBeDefined();
+		expect(fullImageCacheHas('img-expire')).toBe(true);
+
+		await act(async () => {
+			electronApi.simulateNotchMessage(makeMessage({ text: 'keep message', images: [] }));
+		});
+
+		await act(async () => {
+			timers.advance(1_000);
+		});
+
+		expect(findLightboxOverlay(root)).toBeUndefined();
+		expect(fullImageCacheHas('img-expire')).toBe(false);
 
 		await act(async () => {
 			root.unmount();

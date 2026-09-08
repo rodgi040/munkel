@@ -1,7 +1,7 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test';
 import { WebSocketServer, WebSocket } from 'ws';
 import { deriveGroupKeys, seal, open, sealRaw, encodeChat, encodeProfile, MAX_CHAT_CHARS } from '../../core';
-import { GroupSession, buildEchoImages } from '../group-session';
+import { GroupSession, buildEchoImages, RECEIVED_IMAGES_LRU_CAP } from '../group-session';
 import { getCircleColor } from '../../shared/group-color';
 import type { CircleState, NotchMessage } from '../../shared/types';
 import type { ImageItem } from '../../core';
@@ -922,6 +922,53 @@ describe('GroupSession', () => {
 		await notches.until(() => notches.length >= 1);
 		expect(notches[0]!.text.length).toBe(2048);
 		expect(notches[0]!.text).toBe('c'.repeat(2048));
+
+		session.disconnect();
+	});
+
+	test('receivedImages evicts the oldest entry after RECEIVED_IMAGES_LRU_CAP keys', async () => {
+		const wss = startServer();
+		const relayUrl = `ws://127.0.0.1:${getPort(wss)}`;
+		const code = 'lru-images';
+		const { messageKey } = await deriveGroupKeys(code);
+
+		const notches = new Collector<NotchMessage>();
+		const session = await createSession(
+			code,
+			relayUrl,
+			memberId,
+			{ displayName: 'Windows User', presenceStatus: 'online' },
+			{
+				onStateChange: () => {},
+				onChat: () => {},
+				onNotch: (message) => notches.push(message),
+				getColorIndex: () => 0,
+			},
+		);
+		session.connect();
+
+		await connected;
+		serverSocket!.send(JSON.stringify({ type: 'welcome', members: ['peer-1'] }));
+
+		const oldestKey = 'key-00000000000001';
+		const newestKey = 'key-00000000000021';
+
+		for (let index = 1; index <= RECEIVED_IMAGES_LRU_CAP + 1; index += 1) {
+			const r2Key = `key-${String(index).padStart(14, '0')}`;
+			const imagePayload = {
+				kind: 'image',
+				items: [{ r2Key, mime: 'image/avif', width: 1, height: 1, byteLen: 1, thumb: 'AA' }],
+				caption: '',
+				sentAt: '2025-06-01T12:00:00.000Z',
+			};
+			const sealed = await seal(JSON.stringify(imagePayload), messageKey);
+			serverSocket!.send(JSON.stringify({ type: 'message', from: 'peer-1', payload: sealed }));
+		}
+
+		await notches.until(() => notches.length >= RECEIVED_IMAGES_LRU_CAP + 1);
+
+		expect(session.findImageMime(oldestKey)).toBeUndefined();
+		expect(session.findImageMime(newestKey)).toBe('image/avif');
 
 		session.disconnect();
 	});

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NOTCH_FULL_MS, NOTCH_HISTORY_MS, NOTCH_RETRACT_AT_MS, type NotchPhase } from './notch-phase';
+import {
+	NOTCH_FULL_MS,
+	NOTCH_HISTORY_MS,
+	NOTCH_RETRACT_AT_MS,
+	notchPhaseForElapsed,
+	type NotchPhase,
+} from './notch-phase';
 import { pruneNotchHistory } from './prune-notch-history';
 import { copyAvifBase64ToClipboardAsPng } from './copy-image-to-clipboard';
 import type { NotchMessage } from '../../shared/types';
@@ -73,6 +79,7 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 	const [interacted, setInteracted] = useState(false);
 
 	const phaseTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+	const freshNewestIdRef = useRef<string | null>(null);
 	const leaveHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const copyFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pointerInsideRef = useRef(false);
@@ -187,7 +194,9 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 					entry.text === message.text,
 			);
 		if (isOwnEcho) return;
-		appendHistory(makeHistoryEntry(message));
+		const entry = makeHistoryEntry(message);
+		freshNewestIdRef.current = entry.id;
+		appendHistory(entry);
 		if (leaveHoverTimer.current) {
 			clearTimeout(leaveHoverTimer.current);
 			leaveHoverTimer.current = null;
@@ -205,8 +214,6 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 		appendHistory({ ...makeHistoryEntry(message), isOwn: true });
 	}, [appendHistory, makeHistoryEntry]);
 
-	// Phase lifecycle: FULL → PEEK → RETRACTED for each new newest message.
-	// Silent messages skip the full preview and go straight to peek (ring/sliver).
 	useEffect(() => {
 		phaseTimers.current.forEach(clearTimeout);
 		phaseTimers.current = [];
@@ -216,15 +223,35 @@ export function useNotchLifecycle(options?: { onNotchHide?: () => void; ownMembe
 			return;
 		}
 
-		if (newest.silent) {
-			setPhase('peek');
-			const retractTimer = setTimeout(() => setPhase('retracted'), NOTCH_RETRACT_AT_MS - NOTCH_FULL_MS);
-			phaseTimers.current = [retractTimer];
+		const fromFreshMessage = freshNewestIdRef.current === newest.id;
+		if (fromFreshMessage) freshNewestIdRef.current = null;
+
+		if (fromFreshMessage) {
+			if (newest.silent) {
+				setPhase('peek');
+				const retractTimer = setTimeout(() => setPhase('retracted'), NOTCH_RETRACT_AT_MS - NOTCH_FULL_MS);
+				phaseTimers.current = [retractTimer];
+			} else {
+				setPhase('full');
+				const fullTimer = setTimeout(() => setPhase('peek'), NOTCH_FULL_MS);
+				const retractTimer = setTimeout(() => setPhase('retracted'), NOTCH_RETRACT_AT_MS);
+				phaseTimers.current = [fullTimer, retractTimer];
+			}
 		} else {
-			setPhase('full');
-			const fullTimer = setTimeout(() => setPhase('peek'), NOTCH_FULL_MS);
-			const retractTimer = setTimeout(() => setPhase('retracted'), NOTCH_RETRACT_AT_MS);
-			phaseTimers.current = [fullTimer, retractTimer];
+			const elapsed = Date.now() - Date.parse(newest.receivedAt);
+			const seeded = notchPhaseForElapsed(elapsed);
+			setPhase(seeded);
+			if (seeded === 'full') {
+				const peekIn = NOTCH_FULL_MS - elapsed;
+				const retractIn = NOTCH_RETRACT_AT_MS - elapsed;
+				phaseTimers.current = [
+					setTimeout(() => setPhase('peek'), peekIn),
+					setTimeout(() => setPhase('retracted'), retractIn),
+				];
+			} else if (seeded === 'peek') {
+				const retractIn = NOTCH_RETRACT_AT_MS - elapsed;
+				phaseTimers.current = [setTimeout(() => setPhase('retracted'), retractIn)];
+			}
 		}
 
 		return () => {
