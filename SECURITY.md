@@ -3,10 +3,26 @@
 ## Supported versions
 
 Security fixes target the latest released version. Before the first stable
-release, fixes land on `main` and are included in the next release. Updates
-reach installed apps through [Sparkle](https://sparkle-project.org) as
-EdDSA-signed, notarized in-place updates; the Homebrew cask (`auto_updates
-true`) defers to Sparkle.
+release, fixes land on `main` and are included in the next release.
+
+**macOS.** Updates reach installed apps through
+[Sparkle](https://sparkle-project.org) as EdDSA-signed, notarized in-place
+updates; the Homebrew cask (`auto_updates true`) defers to Sparkle.
+
+**Windows.** Updates use
+[electron-updater](https://www.electron.build/auto-update) against the
+GitHub Releases feed. On each check the app fetches `latest.yml` over HTTPS
+and verifies the downloaded installer against the checksum published there.
+Release artifacts are currently **unsigned**, and publisher verification is
+**disabled** (`verifyUpdateCodeSignature: false` in
+`apps/windows/electron-builder.yml`): the updater does not confirm who built
+the installer, only that it matches the feed. **Trust boundary:** anyone who
+can alter both the release feed and the installer — for example by
+compromising the publishing repository or breaking HTTPS to GitHub Releases
+— could cause the app to install a different binary. This is a deliberate
+decision ([limehq/munkel#235](https://github.com/limehq/munkel/issues/235)),
+not an oversight; Authenticode signing is tracked in
+[#60](https://github.com/rodgi040/munkel/issues/60).
 
 ## Reporting a vulnerability
 
@@ -120,11 +136,12 @@ followed by adversaries that are explicitly out of scope.
   user account, or the operating system is compromised (malware, a hostile
   recorder that bypasses capture exclusion, a kernel exploit), Munkel's
   on-screen and on-device protections do not hold.
-- **Supply-chain risks beyond our controls.** We sign and notarize releases
-  (EdDSA via Sparkle), pin and review dependencies, and run CI security checks
-  (CodeQL, OpenSSF Scorecard). Compromise of upstream toolchains, GitHub,
-  Cloudflare, or Apple infrastructure is outside what this project can
-  guarantee.
+- **Supply-chain risks beyond our controls.** macOS releases are signed and
+  notarized (EdDSA via Sparkle). Windows releases are currently unsigned
+  with publisher verification disabled — see the Windows update notes above.
+  We pin and review dependencies, and run CI security checks (CodeQL, OpenSSF
+  Scorecard). Compromise of upstream toolchains, GitHub, Cloudflare, or Apple
+  infrastructure is outside what this project can guarantee.
 
 ## Credential & password storage
 
