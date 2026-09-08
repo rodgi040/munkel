@@ -22,7 +22,7 @@ const ringStyle = { '--ring-circumference': `${RING_CIRCUMFERENCE}` } as CSSProp
 // slightly from the renderer's `offsetHeight`, which can retrigger the
 // observer and cause an IPC-spamming resize oscillation. 80ms matches the
 // notch's other UI timing constants (see the reply-focus delay below).
-const RESIZE_REPORT_DEBOUNCE_MS = 80;
+export const RESIZE_REPORT_DEBOUNCE_MS = 80;
 
 // Minimum spacing between hover-copy activity pings sent to the main process
 // on mousemove. The main process disarms the "C" shortcut after ~15s without

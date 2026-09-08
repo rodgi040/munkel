@@ -2,8 +2,10 @@ import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import React from 'react';
 import { create, act } from 'react-test-renderer';
 import { AppProvider } from '../../store/app-store';
-import NotchWidget from '../NotchWidget';
+import NotchWidget, { RESIZE_REPORT_DEBOUNCE_MS } from '../NotchWidget';
 import type { NotchMessage } from '../../../shared/types';
+import { PREVIEW_DEBOUNCE_MS } from '../../lib/image-preview-state';
+import { FakeTimers } from '../../../test-support/fake-timers';
 
 // Minimal electronAPI surface NotchWidget (and the useNotchLifecycle hook it
 // drives) touches. Kept separate from MenuWindow's mock so this file states
@@ -90,8 +92,11 @@ class FakeResizeObserver {
 describe('NotchWidget resize reporting (P1.3 / WIN-NOTCH-004)', () => {
 	let electronApi: ReturnType<typeof createMockElectronApi>;
 	let originalResizeObserver: unknown;
+	let timers: FakeTimers;
 
 	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
 		electronApi = createMockElectronApi();
 		(globalThis as unknown as { window: { electronAPI: typeof electronApi } }).window = {
 			electronAPI: electronApi,
@@ -102,6 +107,7 @@ describe('NotchWidget resize reporting (P1.3 / WIN-NOTCH-004)', () => {
 	});
 
 	afterEach(() => {
+		timers.restore();
 		delete (globalThis as unknown as { window?: unknown }).window;
 		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
 	});
@@ -136,14 +142,8 @@ describe('NotchWidget resize reporting (P1.3 / WIN-NOTCH-004)', () => {
 		});
 	});
 
-	/** Real (not mocked) delay helper. Using real timers here — instead of a
-	 * global fake-timer mock — avoids cross-file timer-mock leakage into
-	 * other suites that share this test process (observed as flaky
-	 * `window is not defined` failures when a global fake-timer mock was
-	 * used previously). The debounce is short (80ms) so real waits stay fast. */
-	function wait(ms: number) {
-		return new Promise<void>((resolve) => setTimeout(resolve, ms));
-	}
+	/** Debounce window for ResizeObserver-driven notchResize reports. */
+	const WITHIN_DEBOUNCE_MS = Math.floor(RESIZE_REPORT_DEBOUNCE_MS / 4);
 
 	it('observes the widget element exactly once and re-reports height (debounced) when the observer fires', async () => {
 		const calls: number[] = [];
@@ -165,7 +165,7 @@ describe('NotchWidget resize reporting (P1.3 / WIN-NOTCH-004)', () => {
 		expect(calls.length).toBe(callsBeforeFire);
 
 		await act(async () => {
-			await wait(150);
+			timers.advance(RESIZE_REPORT_DEBOUNCE_MS);
 		});
 
 		expect(calls.length).toBeGreaterThan(callsBeforeFire);
@@ -191,15 +191,15 @@ describe('NotchWidget resize reporting (P1.3 / WIN-NOTCH-004)', () => {
 		// the 80ms debounce window of each other.
 		await act(async () => {
 			observer.fire();
-			await wait(20);
+			timers.advance(WITHIN_DEBOUNCE_MS);
 			observer.fire();
-			await wait(20);
+			timers.advance(WITHIN_DEBOUNCE_MS);
 			observer.fire();
 		});
 		expect(calls.length).toBe(callsAfterMount);
 
 		await act(async () => {
-			await wait(150);
+			timers.advance(RESIZE_REPORT_DEBOUNCE_MS);
 		});
 
 		expect(calls.length).toBe(callsAfterMount + 1);
@@ -892,6 +892,7 @@ describe('NotchWidget history expand/collapse (Plan 12 P3.6)', () => {
 describe('NotchWidget history expand resize reporting (Iteration-8 review follow-up)', () => {
 	let electronApi: ReturnType<typeof createMockElectronApi>;
 	let originalResizeObserver: unknown;
+	let timers: FakeTimers;
 
 	function makeMessage(overrides: Partial<NotchMessage> = {}): NotchMessage {
 		return {
@@ -906,6 +907,8 @@ describe('NotchWidget history expand resize reporting (Iteration-8 review follow
 	}
 
 	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
 		electronApi = createMockElectronApi();
 		(globalThis as unknown as { window: { electronAPI: typeof electronApi } }).window = {
 			electronAPI: electronApi,
@@ -916,13 +919,10 @@ describe('NotchWidget history expand resize reporting (Iteration-8 review follow
 	});
 
 	afterEach(() => {
+		timers.restore();
 		delete (globalThis as unknown as { window?: unknown }).window;
 		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
 	});
-
-	function wait(ms: number) {
-		return new Promise<void>((resolve) => setTimeout(resolve, ms));
-	}
 
 	function widgetNode(root: ReturnType<typeof create>) {
 		return root.root.findByProps({ 'data-testid': 'notch-widget' });
@@ -977,7 +977,7 @@ describe('NotchWidget history expand resize reporting (Iteration-8 review follow
 		});
 		await reopenHistory(root!);
 		await act(async () => {
-			await wait(150);
+			timers.advance(RESIZE_REPORT_DEBOUNCE_MS);
 		});
 		const callsBeforeExpand = calls.length;
 
@@ -999,7 +999,7 @@ describe('NotchWidget history expand resize reporting (Iteration-8 review follow
 		const observer = FakeResizeObserver.instances.find((o) => !o.disconnected)!;
 		await act(async () => {
 			observer.fire();
-			await wait(150);
+			timers.advance(RESIZE_REPORT_DEBOUNCE_MS);
 		});
 
 		expect(calls.length).toBeGreaterThan(callsBeforeExpand);
@@ -1019,77 +1019,6 @@ describe('NotchWidget history expand resize reporting (Iteration-8 review follow
 		});
 	});
 });
-
-/**
- * Deterministic fake timer/interval implementation, mirroring the one
- * already proven safe in useNotchLifecycle.test.ts (same package). Scoped
- * with install()/restore() to a single describe block's beforeEach/afterEach
- * below so it can never leak into other describes in this file — the other
- * describes above deliberately use real timers (see the "resize reporting"
- * describe's comment on prior fake-timer flakiness), which this local class
- * does not touch since it's only installed for the tests that opt in.
- */
-class FakeTimers {
-	private now = 0;
-	private nextId = 1;
-	private readonly timers = new Map<
-		number,
-		{ fn: () => void; time: number; delay: number; repeat: boolean }
-	>();
-	private readonly original = {
-		setTimeout: globalThis.setTimeout,
-		clearTimeout: globalThis.clearTimeout,
-		setInterval: globalThis.setInterval,
-		clearInterval: globalThis.clearInterval,
-		dateNow: Date.now,
-	};
-
-	install() {
-		globalThis.setTimeout = ((fn: () => void, delay = 0) => this.add(fn, delay, false)) as typeof setTimeout;
-		globalThis.clearTimeout = ((id: number | undefined) => this.remove(id)) as typeof clearTimeout;
-		globalThis.setInterval = ((fn: () => void, delay = 0) => this.add(fn, delay, true)) as typeof setInterval;
-		globalThis.clearInterval = ((id: number | undefined) => this.remove(id)) as typeof clearInterval;
-		Date.now = () => this.now;
-	}
-
-	restore() {
-		globalThis.setTimeout = this.original.setTimeout;
-		globalThis.clearTimeout = this.original.clearTimeout;
-		globalThis.setInterval = this.original.setInterval;
-		globalThis.clearInterval = this.original.clearInterval;
-		Date.now = this.original.dateNow;
-	}
-
-	advance(ms: number) {
-		this.now += ms;
-		this.runDue();
-	}
-
-	private add(fn: () => void, delay: number, repeat: boolean): number {
-		const id = this.nextId++;
-		this.timers.set(id, { fn, time: this.now + delay, delay, repeat });
-		return id;
-	}
-
-	private remove(id: number | undefined) {
-		if (id !== undefined) this.timers.delete(id);
-	}
-
-	private runDue() {
-		const due = [...this.timers.entries()]
-			.filter(([, timer]) => timer.time <= this.now)
-			.sort((a, b) => a[1].time - b[1].time);
-		for (const [id, timer] of due) {
-			if (!this.timers.has(id)) continue;
-			if (timer.repeat) {
-				timer.time += timer.delay;
-			} else {
-				this.timers.delete(id);
-			}
-			timer.fn();
-		}
-	}
-}
 
 describe('NotchWidget history pruning & pulse-across-phase (Iteration-8 review follow-up)', () => {
 	let electronApi: ReturnType<typeof createMockElectronApi>;
@@ -1992,6 +1921,7 @@ describe('NotchWidget message ticker wiring (Plan 13 item 7)', () => {
 describe('NotchWidget image preview click-through authority (single-click-through-authority fix)', () => {
 	let electronApi: ReturnType<typeof createMockElectronApi>;
 	let originalResizeObserver: unknown;
+	let timers: FakeTimers;
 
 	function makeMessage(overrides: Partial<NotchMessage> = {}): NotchMessage {
 		return {
@@ -2007,6 +1937,8 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 	}
 
 	beforeEach(() => {
+		timers = new FakeTimers();
+		timers.install();
 		electronApi = createMockElectronApi();
 		(globalThis as unknown as {
 			window: { electronAPI: typeof electronApi; addEventListener: unknown; removeEventListener: unknown };
@@ -2020,13 +1952,10 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 	});
 
 	afterEach(() => {
+		timers.restore();
 		delete (globalThis as unknown as { window?: unknown }).window;
 		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
 	});
-
-	function wait(ms: number) {
-		return new Promise<void>((resolve) => setTimeout(resolve, ms));
-	}
 
 	async function renderWidget() {
 		let root: ReturnType<typeof create>;
@@ -2058,7 +1987,7 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 		// The hover preview commits after the 180ms debounce (see
 		// useImagePreview.ts / PREVIEW_DEBOUNCE_MS).
 		await act(async () => {
-			await wait(220);
+			timers.advance(PREVIEW_DEBOUNCE_MS);
 		});
 
 		await act(async () => {
