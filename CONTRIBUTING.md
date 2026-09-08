@@ -79,6 +79,20 @@ the issue tracker and fixed like any other defect. Reviewers check that the
 docs in a PR match the behavior it ships. CI runs `bun run typecheck` and
 `bun run test` on every pull request, so keep both green alongside the docs.
 
+### Landing preview CI
+
+The `Deploy Landing Preview` workflow (`.github/workflows/deploy-landing-preview.yml`)
+runs only when a pull request's diff touches `apps/landing/**` or that workflow
+file. It is not triggered by root lockfile or turbo config changes alone, so
+long-lived branches that rarely touch landing do not accumulate a permanent red
+check from preview deploy.
+
+Preview upload needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for the
+`limehq` Cloudflare account. Repositories without those secrets still build
+landing in CI; upload and the preview URL comment are skipped instead of failing
+the job. Production deploy on `main` (`.github/workflows/deploy-landing.yml`) is
+unchanged and still requires credentials.
+
 ## Security reports
 
 Do not report vulnerabilities in public issues. Follow [SECURITY.md](SECURITY.md).
