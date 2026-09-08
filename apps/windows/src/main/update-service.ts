@@ -189,7 +189,6 @@ class UpdateServiceImpl implements UpdateService {
 			clearInterval(this.intervalId);
 			this.intervalId = null;
 		}
-		this.autoUpdater.removeAllListeners();
 	}
 
 	setAutoCheckEnabled(enabled: boolean): void {
@@ -205,6 +204,7 @@ class UpdateServiceImpl implements UpdateService {
 		this.disposed = true;
 		this.clearQuitDetection();
 		this.stopPeriodicCheck();
+		this.autoUpdater.removeAllListeners();
 	}
 
 	private armQuitDetection(): void {
