@@ -9,6 +9,10 @@ import type { CircleState, IdentityState, NotchMessage, PresenceStatus, StateUpd
 // silently pinned dev circles to a dead relay → never online (presence bug H-A).
 const DEFAULT_RELAY_URL = process.env.MUNKEL_RELAY_URL ?? 'wss://relay.munkel.app';
 
+function maskCircleCode(code: string): string {
+	return `${code.slice(0, 4)}…`;
+}
+
 export type { StateUpdate, CircleState } from '../shared/types';
 
 interface IdentityUpdate {
@@ -97,7 +101,11 @@ export class AppState {
 			// connect failure, and confirm which memberId this client actually uses.
 			console.error(
 				'[session] joinCircle',
-				JSON.stringify({ code: normalized, relayUrl: url, memberId: `${this.identity.memberId.slice(0, 8)}…` }),
+				JSON.stringify({
+					code: maskCircleCode(normalized),
+					relayUrl: url,
+					memberId: `${this.identity.memberId.slice(0, 8)}…`,
+				}),
 			);
 
 			const session = await GroupSession.create(normalized, url, this.identity.memberId, this.identity, {
@@ -265,7 +273,7 @@ export class AppState {
 			'[session] restoreCircles',
 			JSON.stringify({
 				count: circles.length,
-				circles: circles.map((c) => ({ code: c.code, relayUrl: c.relayUrl })),
+				circles: circles.map((c) => ({ code: maskCircleCode(c.code), relayUrl: c.relayUrl })),
 			}),
 		);
 		for (const circle of circles) {
@@ -279,10 +287,20 @@ export class AppState {
 			if (relayUrl !== circle.relayUrl) {
 				console.error(
 					'[session] repair localhost relayUrl → default',
-					JSON.stringify({ code: circle.code, from: circle.relayUrl, to: relayUrl }),
+					JSON.stringify({ code: maskCircleCode(circle.code), from: circle.relayUrl, to: relayUrl }),
 				);
 			}
-			await this.joinCircle(circle.code, relayUrl);
+			try {
+				await this.joinCircle(circle.code, relayUrl);
+			} catch (err) {
+				console.error(
+					'[session] restoreCircle failed',
+					JSON.stringify({
+						code: maskCircleCode(circle.code),
+						error: err instanceof Error ? err.message : String(err),
+					}),
+				);
+			}
 		}
 	}
 
