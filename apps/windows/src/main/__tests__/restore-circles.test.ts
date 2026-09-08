@@ -51,10 +51,10 @@ describe('AppState.restoreCircles', () => {
 	const originalConsoleError = console.error;
 	const errorLogs: unknown[][] = [];
 
-	afterEach(() => {
+	afterEach(async () => {
 		if (appState) {
 			for (const circle of appState.getState().circles) {
-				appState.leaveCircle(circle.code);
+				await appState.leaveCircle(circle.code);
 			}
 		}
 		appState = null;

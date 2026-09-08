@@ -52,7 +52,7 @@ export function registerSessionHandlers(
 	});
 
 	ipcMain.handle(IPC_CHANNELS.LEAVE_CIRCLE, async (_event, code: string) => {
-		appState.leaveCircle(code);
+		await appState.leaveCircle(code);
 	});
 
 	ipcMain.handle(IPC_CHANNELS.SEND_CHAT, async (_event, code: string, text: string, to?: string) => {

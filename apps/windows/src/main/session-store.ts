@@ -21,9 +21,13 @@ interface IdentityUpdate {
 	githubLogin?: string;
 }
 
+type SessionFactory = typeof GroupSession.create;
+
 export class AppState {
 	private readonly sessions = new Map<string, GroupSession>();
 	private readonly joinLocks = new Map<string, Promise<void>>();
+	private readonly leftDuringJoin = new Set<string>();
+	private readonly createSession: SessionFactory;
 	private identity: IdentityState;
 	private profileTimer: ReturnType<typeof setTimeout> | null = null;
 	// Dev-only "echo my own broadcasts" (Plan 13 item 6). Feature mirrors
@@ -40,8 +44,9 @@ export class AppState {
 		private readonly onBroadcast: (update: StateUpdate) => void,
 		private readonly onNotch: (message: NotchMessage) => void,
 		private readonly onRelayError?: (message: string) => void,
-		options?: { isDev?: boolean },
+		options?: { isDev?: boolean; createSession?: SessionFactory },
 	) {
+		this.createSession = options?.createSession ?? GroupSession.create;
 		const persisted = identityStore.load();
 		const presenceStatus = persisted.presenceStatus ?? 'online';
 		this.identity = {
@@ -94,6 +99,10 @@ export class AppState {
 		this.joinLocks.set(normalized, lock);
 
 		try {
+			if (this.leftDuringJoin.has(normalized)) {
+				return;
+			}
+
 			const persisted = this.identityStore.load().circles.find((c) => c.code === normalized);
 			const url = relayUrl ?? persisted?.relayUrl ?? DEFAULT_RELAY_URL;
 			// Phase-0 diagnostics (presence bug): make the chosen relay URL + member
@@ -108,7 +117,7 @@ export class AppState {
 				}),
 			);
 
-			const session = await GroupSession.create(normalized, url, this.identity.memberId, this.identity, {
+			const session = await this.createSession(normalized, url, this.identity.memberId, this.identity, {
 				onStateChange: () => this.broadcast(),
 				onNotch: (message) => this.onNotch(message),
 				onError: (message) => this.onRelayError?.(message),
@@ -123,6 +132,10 @@ export class AppState {
 				shouldEchoBroadcasts: () => this.devEchoBroadcastsEnabled,
 			});
 
+			if (this.leftDuringJoin.has(normalized)) {
+				return;
+			}
+
 			this.sessions.set(normalized, session);
 			this.identityStore.addCircle(normalized, url);
 			session.connect();
@@ -133,14 +146,22 @@ export class AppState {
 		}
 	}
 
-	leaveCircle(code: string): void {
+	async leaveCircle(code: string): Promise<void> {
 		const normalized = normalizeCircleCode(code);
+		this.leftDuringJoin.add(normalized);
+
+		const existingLock = this.joinLocks.get(normalized);
+		if (existingLock) {
+			await existingLock;
+		}
+
 		const session = this.sessions.get(normalized);
 		if (session) {
 			session.disconnect();
 			this.sessions.delete(normalized);
 		}
 		this.identityStore.removeCircle(normalized);
+		this.leftDuringJoin.delete(normalized);
 		this.broadcast();
 	}
 
