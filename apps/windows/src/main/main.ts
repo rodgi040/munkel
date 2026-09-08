@@ -594,9 +594,9 @@ app.whenReady().then(async () => {
 	});
 
 	// Named-pipe / Unix-socket control server for the `munkel` CLI. One
-	// request/response per connection. Unpredictable name published to a
-	// user-private file (Node cannot set a Windows DACL directly). Started
-	// after IPC so a listen hang never blocks the tray/menu/notch.
+	// request/response per connection. Randomised name published to a
+	// user-private file so the CLI can discover it. Started after IPC so
+	// a listen hang never blocks the tray/menu/notch.
 	const controlPipeName = generatePipeName();
 	try {
 		controlServer = await createControlServer(
