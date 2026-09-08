@@ -30,6 +30,7 @@ win:
 nsis:
   # One-click: double-click Setup.exe → done (no wizard, no manual config).
   oneClick: true
+  deleteAppDataOnUninstall: true
   perMachine: false
   allowToChangeInstallationDirectory: false
   createDesktopShortcut: always
