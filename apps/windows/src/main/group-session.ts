@@ -68,6 +68,8 @@ export interface GroupSessionCallbacks {
  * mapping is unit-testable without exercising the (WASM/OffscreenCanvas
  * -dependent) image codec pipeline that produces `items` in the first place.
  */
+export const RECEIVED_IMAGES_LRU_CAP = 32;
+
 export function buildEchoImages(items: ImageItem[]): IncomingImage[] {
 	return items.map((it) => ({ id: it.r2Key, thumb: it.thumb, width: it.width, height: it.height }));
 }
@@ -146,6 +148,18 @@ export class GroupSession {
 
 	findImageMime(r2Key: string): string | undefined {
 		return this.receivedImages.get(r2Key)?.mime;
+	}
+
+	private rememberReceivedImage(r2Key: string, item: ImageItem): void {
+		if (this.receivedImages.has(r2Key)) {
+			this.receivedImages.delete(r2Key);
+		}
+		this.receivedImages.set(r2Key, item);
+		while (this.receivedImages.size > RECEIVED_IMAGES_LRU_CAP) {
+			const oldest = this.receivedImages.keys().next().value;
+			if (oldest === undefined) break;
+			this.receivedImages.delete(oldest);
+		}
 	}
 
 	/**
@@ -498,7 +512,7 @@ export class GroupSession {
 						this.callbacks.onStateChange(this.toState());
 					} else if (decoded.kind === 'image') {
 						for (const it of decoded.items) {
-							this.receivedImages.set(it.r2Key, it);
+							this.rememberReceivedImage(it.r2Key, it);
 						}
 						const images: IncomingImage[] = decoded.items.map((it) => ({
 							id: it.r2Key,

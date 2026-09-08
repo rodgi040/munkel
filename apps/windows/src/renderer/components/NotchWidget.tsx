@@ -11,6 +11,11 @@ import { resolveNotchResizeHeight } from '../lib/notch-resize-height';
 import { memberLabel } from '../../shared/member-label';
 import type { IncomingImage } from '../../shared/types';
 import { useImagePreview } from '../lib/useImagePreview';
+import {
+	getFullImageCacheEntry,
+	pruneFullImageCache,
+	setFullImageCacheEntry,
+} from '../lib/full-image-cache';
 import { MAX_MESSAGE_CHARS, clampMessageText } from '@munkel/shared-wire/message-limits';
 
 const RING_RADIUS = 8;
@@ -161,7 +166,6 @@ export default function NotchWidget() {
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [previewError, setPreviewError] = useState<string | null>(null);
 	const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
-	const fullImageCache = useRef<Map<string, { data: string; mime: string }>>(new Map());
 	const previewEpoch = useRef(0);
 
 	const handleNotchHide = useCallback(() => {
@@ -317,6 +321,7 @@ export default function NotchWidget() {
 			});
 			return changed ? next : current;
 		});
+		pruneFullImageCache(liveIds);
 
 		for (const entry of history) {
 			for (const img of entry.images ?? []) {
@@ -526,7 +531,7 @@ export default function NotchWidget() {
 		setPreviewImage(img);
 		setPreviewError(null);
 		setImagePreviewOpen(true);
-		const cached = fullImageCache.current.get(img.id);
+		const cached = getFullImageCacheEntry(img.id);
 		if (cached) {
 			setFullImage(cached);
 			return;
@@ -537,7 +542,7 @@ export default function NotchWidget() {
 			.fetchFullImage(group, img.id)
 			.then((res) => {
 				if (res.ok) {
-					fullImageCache.current.set(img.id, { data: res.data, mime: res.mime });
+					setFullImageCacheEntry(img.id, { data: res.data, mime: res.mime });
 				}
 				if (epoch !== previewEpoch.current) return;
 				setPreviewLoading(false);

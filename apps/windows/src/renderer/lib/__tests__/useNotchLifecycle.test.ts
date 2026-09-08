@@ -4,6 +4,7 @@ import { create, act } from 'react-test-renderer';
 import { useNotchLifecycle, type UseNotchLifecycleReturn } from '../useNotchLifecycle';
 import type { NotchMessage } from '../../../shared/types';
 import { FakeTimers } from '../../../test-support/fake-timers';
+import { NOTCH_FULL_MS, NOTCH_PEEK_MS, NOTCH_RETRACT_AT_MS } from '../notch-phase';
 
 function createElectronApi() {
 	return {
@@ -794,6 +795,50 @@ describe('useNotchLifecycle', () => {
 		expect(result.current.newest?.text).toBe('incoming');
 		expect(result.current.replyOpen).toBe(true);
 		expect(result.current.phase).toBe('full');
+	});
+
+	it('seeds phase from receivedAt when an older message becomes newest after history prune', async () => {
+		const { result } = renderHook(useNotchLifecycle);
+
+		await act(async () => {
+			result.current.onNotchMessage(
+				makeMessage({ text: 'older', receivedAt: new Date(50_000).toISOString() }),
+			);
+		});
+		await act(async () => {
+			timers.advance(60_000);
+			result.current.onNotchMessage(
+				makeMessage({ text: 'newer', receivedAt: new Date(10_000).toISOString() }),
+			);
+		});
+		expect(result.current.phase).toBe('full');
+
+		await act(async () => {
+			timers.advance(10_000);
+		});
+
+		expect(result.current.newest?.text).toBe('older');
+		expect(result.current.phase).toBe('peek');
+	});
+
+	it('runs full → peek → retracted for a genuinely new message using exported phase constants', async () => {
+		const { result } = renderHook(useNotchLifecycle);
+
+		await act(async () => {
+			result.current.onNotchMessage(makeMessage({ text: 'fresh' }));
+		});
+		expect(result.current.phase).toBe('full');
+
+		await act(async () => {
+			timers.advance(NOTCH_FULL_MS);
+		});
+		expect(result.current.phase).toBe('peek');
+
+		await act(async () => {
+			timers.advance(NOTCH_PEEK_MS);
+		});
+		expect(result.current.phase).toBe('retracted');
+		expect(NOTCH_FULL_MS + NOTCH_PEEK_MS).toBe(NOTCH_RETRACT_AT_MS);
 	});
 
 	it('skips own-member echoes and isOwn text duplicates in onNotchMessage', async () => {
