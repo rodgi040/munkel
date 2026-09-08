@@ -2084,3 +2084,111 @@ describe('NotchWidget image preview click-through authority (single-click-throug
 		});
 	});
 });
+
+describe('NotchWidget image preview Escape close', () => {
+	let electronApi: ReturnType<typeof createMockElectronApi>;
+	let originalResizeObserver: unknown;
+
+	function makeMessage(overrides: Partial<NotchMessage> = {}): NotchMessage {
+		return {
+			sender: 'Alice',
+			text: 'Hello from Alice',
+			isDirect: false,
+			group: 'test-circle',
+			groupColor: '#3b82f6',
+			receivedAt: new Date().toISOString(),
+			images: [{ id: 'img-1', width: 100, height: 100, thumb: 'AAAA', mime: 'image/avif' }],
+			...overrides,
+		};
+	}
+
+	beforeEach(() => {
+		electronApi = createMockElectronApi();
+		const windowListeners = new Map<string, EventListenerOrEventListenerObject[]>();
+		const addListener = (type: string, listener: EventListenerOrEventListenerObject) => {
+			windowListeners.set(type, [...(windowListeners.get(type) ?? []), listener]);
+		};
+		const removeListener = (type: string, listener: EventListenerOrEventListenerObject) => {
+			windowListeners.set(type, (windowListeners.get(type) ?? []).filter((l) => l !== listener));
+		};
+		(globalThis as unknown as {
+			window: {
+				electronAPI: typeof electronApi;
+				addEventListener: typeof addListener;
+				removeEventListener: typeof removeListener;
+				dispatchEvent: (e: Event) => boolean;
+			};
+		}).window = {
+			electronAPI: electronApi,
+			addEventListener: addListener as unknown as typeof window.addEventListener,
+			removeEventListener: removeListener as unknown as typeof window.removeEventListener,
+			dispatchEvent: (e: Event) => {
+				for (const listener of windowListeners.get(e.type) ?? []) {
+					if (typeof listener === 'function') listener(e);
+					else listener.handleEvent(e);
+				}
+				return true;
+			},
+		};
+		originalResizeObserver = (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+		delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver;
+	});
+
+	afterEach(() => {
+		delete (globalThis as unknown as { window?: unknown }).window;
+		(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver;
+	});
+
+	async function renderWidget() {
+		let root: ReturnType<typeof create>;
+		await act(async () => {
+			root = create(
+				<AppProvider>
+					<NotchWidget />
+				</AppProvider>,
+			);
+			await Promise.resolve();
+		});
+		return root!;
+	}
+
+	function findLightboxOverlay(root: ReturnType<typeof create>) {
+		return root.root.findAll((node) => node.props.className === 'image-lightbox-overlay')[0];
+	}
+
+	it('closes the image preview overlay when Escape is pressed', async () => {
+		const previewActiveCalls: boolean[] = [];
+		electronApi.notchSetPreviewActive = (active: boolean) => {
+			previewActiveCalls.push(active);
+			return Promise.resolve();
+		};
+
+		const root = await renderWidget();
+		await act(async () => {
+			electronApi.simulateNotchMessage(makeMessage());
+		});
+
+		const thumb = root.root.findByProps({ className: 'image-preview-thumb' });
+		await act(async () => {
+			thumb.props.onClick({ stopPropagation: () => {} });
+		});
+
+		expect(findLightboxOverlay(root)).toBeDefined();
+		expect(previewActiveCalls).toContain(true);
+
+		await act(async () => {
+			window.dispatchEvent({
+				type: 'keydown',
+				key: 'Escape',
+				stopPropagation: () => {},
+			} as Event);
+		});
+
+		expect(findLightboxOverlay(root)).toBeUndefined();
+		expect(previewActiveCalls).toContain(false);
+
+		await act(async () => {
+			root.unmount();
+		});
+	});
+});
