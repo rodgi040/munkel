@@ -14,6 +14,7 @@ class MockSocket extends EventEmitter {
 	readyState = MockSocket.CONNECTING;
 	sent: string[] = [];
 	closed = false;
+	terminated = false;
 
 	constructor(public readonly url: string) {
 		super();
@@ -45,6 +46,7 @@ class MockSocket extends EventEmitter {
 	 * emit) so tests can exercise the "error without close" path precisely.
 	 */
 	terminate(): void {
+		this.terminated = true;
 		this.closed = true;
 		this.readyState = MockSocket.CLOSED;
 	}
@@ -250,5 +252,53 @@ describe('RelayClient', () => {
 		expect(errors.length).toBe(1); // error event is still forwarded
 		expect(disconnectedEvents.length).toBe(0);
 		expect(sockets.length).toBe(1);
+	});
+
+	test('terminates and reconnects when no pong arrives within two ping intervals', async () => {
+		const factory = createFactory();
+		client = new RelayClient('wss://relay.example.com', 'group', 'member', {
+			createWebSocket: factory,
+		});
+
+		const disconnectedEvents: unknown[] = [];
+		client.on('disconnected', () => disconnectedEvents.push(true));
+
+		client.connect();
+		expect(sockets).toHaveLength(1);
+		sockets[0].open();
+
+		timers.advance(30_000);
+		expect(sockets[0].sent).toEqual(['{"type":"ping"}']);
+		expect(sockets[0].terminated).toBe(false);
+
+		timers.advance(30_000);
+		expect(sockets[0].terminated).toBe(true);
+		expect(disconnectedEvents).toHaveLength(1);
+
+		timers.advance(1000);
+		expect(sockets).toHaveLength(2);
+	});
+
+	test('timely pongs do not trigger a false disconnect', async () => {
+		const factory = createFactory();
+		client = new RelayClient('wss://relay.example.com', 'group', 'member', {
+			createWebSocket: factory,
+		});
+
+		const disconnectedEvents: unknown[] = [];
+		client.on('disconnected', () => disconnectedEvents.push(true));
+
+		client.connect();
+		expect(sockets).toHaveLength(1);
+		sockets[0].open();
+
+		for (let tick = 0; tick < 4; tick++) {
+			timers.advance(30_000);
+			sockets[0].receive({ type: 'pong' });
+		}
+
+		expect(sockets[0].terminated).toBe(false);
+		expect(disconnectedEvents).toHaveLength(0);
+		expect(sockets).toHaveLength(1);
 	});
 });
