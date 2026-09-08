@@ -71,9 +71,13 @@ export function buildPipeName(username?: string): string {
 }
 
 /**
- * Generate an unpredictable control-channel address. The random suffix makes
- * the path unguessable for other processes on the same session, which replaces
- * the DACL we cannot set from plain Node.js on Windows.
+ * Generate a non-static control-channel address. The random suffix avoids
+ * collisions with stale endpoints from previous runs; it is not a secret.
+ * On Windows the named-pipe namespace is enumerable by any unprivileged
+ * local process, so the name provides no access control. What restricts
+ * access instead: on POSIX, the 0o700 user config directory the socket
+ * lives in; on Windows, the default security descriptor libuv binds the
+ * pipe with (cross-user scope unverified, tracked in issue #69).
  */
 export function generatePipeName(username?: string): string {
   const user = username ?? process.env.USERNAME ?? process.env.USER ?? 'default';
@@ -86,8 +90,11 @@ export function generatePipeName(username?: string): string {
 
 /**
  * Path to the file where the running app publishes its current control pipe
- * name. The file lives in a user-specific directory so other users cannot read
- * it (Windows: %LOCALAPPDATA% is profile-private; macOS/Linux: 0o600 is set).
+ * name. The file lives in a user-specific config directory so other local
+ * users cannot read it (Windows: the default profile ACL makes
+ * %LOCALAPPDATA% inaccessible to other non-admin users; POSIX: this code
+ * creates the directory with 0o700 and the file with 0o600, both subject
+ * to umask).
  */
 export function getControlPipePath(): string {
   return join(controlConfigDir(), 'control.pipe');
@@ -108,9 +115,11 @@ export function readControlPipeName(): string {
 
 /**
  * Persist the control pipe name so the CLI can discover it. The containing
- * directory is created if necessary. On POSIX the file is created with 0o600;
- * on Windows the file is already protected by the profile-private LOCALAPPDATA
- * directory.
+ * directory is created if necessary with 0o700 (when created by this code;
+ * subject to umask on POSIX). The file is created with mode 0o600 (umask
+ * applies on POSIX); on
+ * Windows the default profile ACL on %LOCALAPPDATA% already restricts the
+ * directory to the user, SYSTEM and Administrators.
  */
 export function writeControlPipeName(pipeName: string): void {
   const path = getControlPipePath();
