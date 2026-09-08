@@ -2,6 +2,9 @@ import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import type { ClientMessage, ServerMessage } from '../core';
 
+const PING_INTERVAL_MS = 30_000;
+const PONG_TIMEOUT_MS = PING_INTERVAL_MS * 2;
+
 /**
  * Reconnecting WebSocket client for one group relay.
  *
@@ -21,6 +24,7 @@ export class RelayClient extends EventEmitter {
 	private backoffMs = 1000;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private pingTimer: ReturnType<typeof setInterval> | null = null;
+	private lastPongAt = 0;
 
 	constructor(
 		relayUrl: string,
@@ -170,9 +174,22 @@ export class RelayClient extends EventEmitter {
 
 	private startPing(): void {
 		this.stopPing();
+		this.lastPongAt = Date.now();
 		this.pingTimer = setInterval(() => {
 			this.send({ type: 'ping' });
-		}, 30_000);
+			this.checkPongTimeout();
+		}, PING_INTERVAL_MS);
+	}
+
+	private checkPongTimeout(): void {
+		const socket = this.socket;
+		if (!socket || socket.readyState !== WebSocket.OPEN) return;
+		if (Date.now() - this.lastPongAt < PONG_TIMEOUT_MS) return;
+		this.log('pong-timeout', {
+			elapsedMs: Date.now() - this.lastPongAt,
+			timeoutMs: PONG_TIMEOUT_MS,
+		});
+		this.handleConnectionLost(socket);
 	}
 
 	private stopPing(): void {
@@ -195,6 +212,9 @@ export class RelayClient extends EventEmitter {
 		}
 		try {
 			const frame = JSON.parse(text) as ServerMessage;
+			if (frame.type === 'pong') {
+				this.lastPongAt = Date.now();
+			}
 			this.emit('frame', frame);
 		} catch (err) {
 			this.emit('error', err instanceof Error ? err : new Error(`Invalid frame: ${text}`));
