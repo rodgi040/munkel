@@ -597,6 +597,26 @@ describe('UpdateService auto-check toggle (Plan 12 P3.7)', () => {
 
 		service.dispose();
 	});
+
+	it('keeps updater listeners after disabling and re-enabling auto-check', () => {
+		const { updater } = createMockUpdater();
+		const { send, states } = createSend();
+
+		const service = initUpdateService(send, { autoUpdater: updater as never, isDev: false, autoCheckEnabled: true });
+		service.setAutoCheckEnabled(false);
+		service.setAutoCheckEnabled(true);
+
+		updater.emit('update-available', { version: '0.2.0' });
+		expect(states.at(-1)).toEqual({ phase: 'available', version: '0.2.0' });
+
+		updater.emit('update-downloaded', { version: '0.2.0' });
+		expect(states.at(-1)).toEqual({ phase: 'downloaded', version: '0.2.0' });
+
+		updater.emit('error', new Error('net::ERR_INTERNET_DISCONNECTED'));
+		expect(states.at(-1)).toEqual({ phase: 'error', error: 'Update check failed: network error.' });
+
+		service.dispose();
+	});
 });
 
 describe('UpdateService error handling', () => {
